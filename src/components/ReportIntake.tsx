@@ -106,6 +106,11 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
   const consecutiveErrorsRef = useRef<number>(0);
   const lastErrorRef = useRef<string>('');
 
+  // MediaRecorder & Whisper Refs
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [isTranscribingWhisper, setIsTranscribingWhisper] = useState(false);
+
   // Decibel Silence VAD Refs
   const hasSpokenVoiceRef = useRef<boolean>(false);
   const silenceStartTimeRef = useRef<number | null>(null);
@@ -118,7 +123,30 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
   useEffect(() => { 
     console.log('[SAARTHI VOICE STATE] Voice mode changed:', voiceModeRef.current, '->', voiceMode);
     voiceModeRef.current = voiceMode; 
+
+    // Start MediaRecorder audio capture when entering dictating mode
+    if (voiceMode === 'dictating' && mediaStreamRef.current) {
+      try {
+        audioChunksRef.current = [];
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4');
+        
+        const recorder = new MediaRecorder(mediaStreamRef.current, { mimeType });
+        recorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+        recorder.start(250);
+        mediaRecorderRef.current = recorder;
+        console.log('[SAARTHI WHISPER RECORDER] Started recording audio chunks (mimeType:', mimeType, ')');
+      } catch (err) {
+        console.warn('[SAARTHI WHISPER RECORDER] Could not start MediaRecorder:', err);
+      }
+    }
   }, [voiceMode]);
+
   useEffect(() => { hasMicPermissionRef.current = hasMicPermission; }, [hasMicPermission]);
   useEffect(() => { reportTextRef.current = reportText; }, [reportText]);
   useEffect(() => { customPhrasesRef.current = customPhrases; }, [customPhrases]);
@@ -150,6 +178,55 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
     });
 
     return customMatch || regexMatch || fuzzyMatch;
+  };
+
+  // Whisper Audio Transcription Call
+  const finishAndTranscribeWhisper = async () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop(); } catch (e) {}
+    }
+
+    await new Promise(r => setTimeout(r, 150));
+
+    if (audioChunksRef.current.length > 0) {
+      const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+      console.log(`[SAARTHI WHISPER CLIENT] Transcribing ${audioBlob.size} bytes audio blob via Whisper API...`);
+
+      const formData = new FormData();
+      formData.append('file', audioBlob, 'speech_dictation.webm');
+
+      try {
+        setIsTranscribingWhisper(true);
+        const res = await fetch('http://localhost:8000/api/v1/transcribe', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.text && data.text.trim()) {
+            console.log('⚡ [SAARTHI WHISPER TRANSCRIPTION RESULT]:', data.text);
+            const cleanedWhisperText = sanitizeReportText(data.text);
+            setReportText(cleanedWhisperText);
+            setIsTranscribingWhisper(false);
+            if (cleanedWhisperText && !isProcessingRef.current) {
+              onSubmitReport(cleanedWhisperText);
+            }
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('[SAARTHI WHISPER CLIENT] Whisper API unreachable (using WebSpeech fallback):', err);
+      } finally {
+        setIsTranscribingWhisper(false);
+      }
+    }
+
+    // Fallback: Submit current text if Whisper endpoint unavailable
+    const fallbackText = sanitizeReportText(reportTextRef.current);
+    if (fallbackText && !isProcessingRef.current) {
+      onSubmitReport(fallbackText);
+    }
   };
 
   // UNIFIED SINGLE-INSTANCE SPEECH RECOGNITION ENGINE
@@ -354,7 +431,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
             if (!silenceStartTimeRef.current) {
               silenceStartTimeRef.current = Date.now();
             } else if (Date.now() - silenceStartTimeRef.current >= SILENCE_FINISH_DURATION_MS) {
-              console.log('⚡ DECIBEL SILENCE DROP DETECTED — ENDING DICTATION & SYNCING!');
+              console.log('⚡ DECIBEL SILENCE DROP DETECTED — TRANSCRIBING VIA WHISPER & AUTO-SUBMITTING!');
               
               silenceStartTimeRef.current = null;
               hasSpokenVoiceRef.current = false;
@@ -364,11 +441,8 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
               setVoiceMode('wake_listen');
               setMicStatus('wake_listening');
 
-              // 2. Submit report automatically!
-              const finalReport = sanitizeReportText(reportTextRef.current);
-              if (finalReport && !isProcessingRef.current) {
-                onSubmitReport(finalReport);
-              }
+              // 2. Transcribe via Whisper & submit report automatically!
+              finishAndTranscribeWhisper();
             }
           }
         }
@@ -533,6 +607,16 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
           <div className="flex items-center gap-2.5">
             <Volume2 className="w-5 h-5 text-cyan-400" />
             <span className="font-extrabold text-cyan-300 text-sm">⚡ WAKE WORD "HEY SAARTHI" DETECTED! LISTENING FOR FIELD REPORT NOW...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Whisper Server Processing Banner */}
+      {isTranscribingWhisper && (
+        <div className="mb-4 p-3.5 bg-amber-950 border-2 border-amber-400 rounded-xs text-xs mono-font text-amber-200 flex items-center justify-between animate-pulse shadow-[0_0_20px_rgba(245,158,11,0.5)]">
+          <div className="flex items-center gap-2.5">
+            <Radio className="w-5 h-5 text-amber-400 animate-spin" />
+            <span className="font-extrabold text-amber-300 text-sm">🤖 TRANSCRIBING AUDIO VIA OPENAI WHISPER MODEL...</span>
           </div>
         </div>
       )}

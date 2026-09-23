@@ -43,7 +43,8 @@ from app.routers import (
     activities_router,
     reports_router,
     match_router,
-    audit_router
+    audit_router,
+    transcribe_router
 )
 
 app.include_router(auth_router, prefix=settings.API_V1_STR)
@@ -52,3 +53,4 @@ app.include_router(activities_router, prefix=settings.API_V1_STR)
 app.include_router(reports_router, prefix=settings.API_V1_STR)
 app.include_router(match_router, prefix=settings.API_V1_STR)
 app.include_router(audit_router, prefix=settings.API_V1_STR)
+app.include_router(transcribe_router, prefix=settings.API_V1_STR)

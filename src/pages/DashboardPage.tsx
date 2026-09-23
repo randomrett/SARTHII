@@ -1,7 +1,7 @@
 import React from 'react';
 import { useScheduleContext } from '../context/ScheduleContext';
 import { MatchingEngine } from '../components/MatchingEngine';
-import { LayoutDashboard, CheckCircle2, Clock, AlertTriangle, Activity as PulseIcon, Layers } from 'lucide-react';
+import { CheckCircle2, Clock, Activity as PulseIcon, Layers } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
   const { activities, matchResults } = useScheduleContext();
@@ -9,7 +9,6 @@ export const DashboardPage: React.FC = () => {
   const totalActivities = activities.length;
   const completedCount = activities.filter(a => a.status === 'completed' || a.progress >= 100).length;
   const inProgressCount = activities.filter(a => a.status === 'in_progress' && a.progress < 100).length;
-  const delayedCount = activities.filter(a => a.status === 'delayed').length;
   const avgProgress = totalActivities > 0 
     ? Math.round(activities.reduce((acc, a) => acc + a.progress, 0) / totalActivities) 
     : 0;

@@ -1,10 +1,10 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Compass, Home, LayoutDashboard, Calendar, FileText, Settings as SettingsIcon, Bot, Zap } from 'lucide-react';
+import { Compass, Home, LayoutDashboard, Calendar, FileText, Settings as SettingsIcon } from 'lucide-react';
 import { useScheduleContext } from '../context/ScheduleContext';
 
 export const Navbar: React.FC = () => {
-  const { autoApproveMode, activities, auditRecords } = useScheduleContext();
+  const { autoApproveMode, auditRecords } = useScheduleContext();
 
   const navItems = [
     { path: '/', label: 'HOME (INTAKE)', icon: Home },

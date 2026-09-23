@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ReportIntake } from '../components/ReportIntake';
 import { useScheduleContext } from '../context/ScheduleContext';
-import { CheckCircle2, ArrowRight, Image, Paperclip, Zap, Bot, FileText } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Paperclip, FileText } from 'lucide-react';
 
 export const HomePage: React.FC = () => {
   const { 

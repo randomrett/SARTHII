@@ -24,6 +24,7 @@ SAARTHI is an AI-powered Planning-to-Execution bridge designed to solve the crit
 ### Backend (`backend/requirements.txt`)
 - **Web Framework**: FastAPI (`fastapi` `>=0.109.0`)
 - **ASGI Server**: Uvicorn (`uvicorn[standard]` `>=0.27.0`)
+- **Voice Recognition**: OpenAI Whisper (`openai-whisper`, `torch`, `python-multipart`) for server-side audio transcription (`POST /api/v1/transcribe`)
 - **Database & ORM**: PostgreSQL (`psycopg2-binary` `>=2.9.9`), SQLAlchemy (`sqlalchemy` `>=2.0.25`), SQLite (local dev fallback)
 - **Database Migrations**: Alembic (`alembic` `>=1.13.1`)
 - **Validation & Settings**: Pydantic v2 (`pydantic[email]` `>=2.6.0`, `email-validator` `>=2.1.0`, `pydantic-settings` `>=2.1.0`)
@@ -196,5 +197,5 @@ See [Roadmap.md](file:///c:/Users/umang/OneDrive/Documents/GitHub/SARTHII/Roadma
 
 ### Top 3 Priorities Next:
 1. **Frontend-to-Backend HTTP Integration**: Point `ScheduleContext.tsx` to the FastAPI backend API endpoints (`/projects`, `/activities`, `/reports`, `/match`, `/audit`) for persistent storage and auth login.
-2. **Data Capture Ingestion (OCR & Whisper)**: Integrate Tesseract OCR for site photo/receipt scanning and server-side Whisper for robust offline/multilingual voice transcription.
+2. **Data Capture Ingestion (OCR Integration)**: Integrate Tesseract OCR for site photo/receipt scanning to complement the OpenAI Whisper voice transcription engine.
 3. **AI/NLP Upgrade (SBERT / Sentence-Transformers)**: Replace keyword token overlap in `backend/app/utils/matching.py` with vector embeddings (`sentence-transformers/all-MiniLM-L6-v2`) for deep semantic matching.

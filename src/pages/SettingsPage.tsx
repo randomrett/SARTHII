@@ -1,7 +1,7 @@
 import React from 'react';
 import { useScheduleContext } from '../context/ScheduleContext';
 import { SCHEDULE_PRESETS } from '../utils/presets';
-import { Settings as SettingsIcon, Bot, Cpu, Layers, Zap, Sparkles, ShieldCheck } from 'lucide-react';
+import { Settings as SettingsIcon, Bot, Cpu, Layers } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
   const {
