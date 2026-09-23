@@ -24,8 +24,14 @@ const SAMPLE_REPORTS = [
   "Bituminous asphalt paving delayed in Section 1 due to heavy rainfall."
 ];
 
-// Phonetic Regex matching "Hey Saarthi" variations
-const DEFAULT_WAKE_WORD_REGEX = /\b(hey|hi|hello|ok|ay|hay|aay)?\s*(saarthi|sarthi|saarti|sarti|saathi|sarathi|sarthee|saarthee|saraty|saari|saari3|sari)\b/gi;
+// Phonetic Regex matching "Hey Saarthi" variations (stateless helper function)
+const DEFAULT_WAKE_WORD_PATTERN = '\\b(hey|hi|hello|ok|ay|hay|aay)?\\s*(saarthi|sarthi|saarti|sarti|saathi|sarathi|sarthee|saarthee|saraty|saari|saari3|sari)\\b';
+
+function isRegexWakeMatch(text: string): boolean {
+  if (!text) return false;
+  const regex = new RegExp(DEFAULT_WAKE_WORD_PATTERN, 'i');
+  return regex.test(text);
+}
 
 // Human speech decibel threshold (% volume)
 const HUMAN_SPEECH_DECIBEL_THRESHOLD = 12; // Volumes <12% represent sub-human voice / silence
@@ -33,8 +39,9 @@ const SILENCE_FINISH_DURATION_MS = 1400; // 1.4 seconds of continuous silence to
 
 function sanitizeReportText(text: string): string {
   if (!text) return '';
+  const regex = new RegExp(DEFAULT_WAKE_WORD_PATTERN, 'gi');
   let result = text
-    .replace(/\b(hey|hi|hello|ok|ay|hay|aay)?\s*(saarthi|sarthi|saarti|sarti|saathi|sarathi|sarthee|saarthee|saraty|saari|saari3|sari)\b/gi, '')
+    .replace(regex, '')
     .replace(/^[\s,.-]+/, '')
     .trim();
 
@@ -95,6 +102,10 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
   const wakeWordResultIndexRef = useRef<number>(0);
   const isProcessingRef = useRef(false);
 
+  // Diagnostic Error Tracker Refs
+  const consecutiveErrorsRef = useRef<number>(0);
+  const lastErrorRef = useRef<string>('');
+
   // Decibel Silence VAD Refs
   const hasSpokenVoiceRef = useRef<boolean>(false);
   const silenceStartTimeRef = useRef<number | null>(null);
@@ -104,7 +115,10 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
-  useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
+  useEffect(() => { 
+    console.log('[SAARTHI VOICE STATE] Voice mode changed:', voiceModeRef.current, '->', voiceMode);
+    voiceModeRef.current = voiceMode; 
+  }, [voiceMode]);
   useEffect(() => { hasMicPermissionRef.current = hasMicPermission; }, [hasMicPermission]);
   useEffect(() => { reportTextRef.current = reportText; }, [reportText]);
   useEffect(() => { customPhrasesRef.current = customPhrases; }, [customPhrases]);
@@ -113,7 +127,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
 
   // Real-time automatic sanitizer watcher on reportText
   useEffect(() => {
-    if (DEFAULT_WAKE_WORD_REGEX.test(reportText)) {
+    if (isRegexWakeMatch(reportText)) {
       const cleaned = sanitizeReportText(reportText);
       if (cleaned !== reportText) {
         setReportText(cleaned);
@@ -123,29 +137,45 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
 
   const matchesWakeWord = (transcript: string): boolean => {
     const lower = transcript.toLowerCase();
-    if (customPhrasesRef.current.some(phrase => lower.includes(phrase.toLowerCase()))) return true;
-    if (DEFAULT_WAKE_WORD_REGEX.test(lower)) return true;
-    if (sensitivityRef.current === 'high' && isFuzzySaarthiMatch(lower)) return true;
-    return false;
+    const customMatch = customPhrasesRef.current.some(phrase => lower.includes(phrase.toLowerCase()));
+    const regexMatch = isRegexWakeMatch(lower);
+    const fuzzyMatch = sensitivityRef.current === 'high' && isFuzzySaarthiMatch(lower);
+    
+    console.log('[SAARTHI VOICE EVAL]', {
+      transcript: lower,
+      customMatch,
+      regexMatch,
+      fuzzyMatch,
+      result: customMatch || regexMatch || fuzzyMatch
+    });
+
+    return customMatch || regexMatch || fuzzyMatch;
   };
 
   // UNIFIED SINGLE-INSTANCE SPEECH RECOGNITION ENGINE
   const startUnifiedSpeechEngine = async () => {
+    console.log('[SAARTHI VOICE] Initializing speech engine...');
+    consecutiveErrorsRef.current = 0;
+    lastErrorRef.current = '';
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
+      console.warn('[SAARTHI VOICE] SpeechRecognition API unsupported in this browser');
       setMicStatus('unsupported');
       return;
     }
 
     if (!mediaStreamRef.current) {
       try {
+        console.log('[SAARTHI VOICE] Requesting microphone permission...');
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaStreamRef.current = stream;
         startAudioAnalysis(stream);
         hasMicPermissionRef.current = true;
         setHasMicPermission(true);
+        console.log('[SAARTHI VOICE] Microphone permission GRANTED');
       } catch (err) {
-        console.warn('Mic permission error:', err);
+        console.warn('[SAARTHI VOICE] Microphone permission DENIED:', err);
         setMicStatus('denied');
         hasMicPermissionRef.current = false;
         setHasMicPermission(false);
@@ -163,11 +193,14 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
     recognition.lang = 'en-US';
 
     recognition.onresult = (event: any) => {
+      consecutiveErrorsRef.current = 0; // Reset error count on successful output
       let currentInterim = '';
 
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const rawTranscript = event.results[i][0].transcript;
         const isFinal = event.results[i].isFinal;
+        
+        console.log(`[SAARTHI VOICE onresult index ${i}]`, { rawTranscript, isFinal, mode: voiceModeRef.current });
 
         // MODE A: WAKE WORD LISTENING
         if (voiceModeRef.current === 'wake_listen') {
@@ -217,17 +250,42 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
     };
 
     recognition.onerror = (event: any) => {
-      console.warn('Speech engine error:', event.error);
+      console.warn('[SAARTHI VOICE onerror] Engine error:', event.error);
+      lastErrorRef.current = event.error;
+      
       if (event.error === 'not-allowed') {
         setMicStatus('denied');
+        hasMicPermissionRef.current = false;
+        setHasMicPermission(false);
+      } else if (event.error === 'network' || event.error === 'audio-capture') {
+        consecutiveErrorsRef.current += 1;
+        console.warn(`[SAARTHI VOICE] ${event.error} error (count: ${consecutiveErrorsRef.current})`);
+      } else if (event.error === 'no-speech') {
+        console.log('[SAARTHI VOICE] Silence drop ("no-speech"). Recognition will restart in onend.');
       }
     };
 
     recognition.onend = () => {
+      console.log('[SAARTHI VOICE onend] Engine stopped. Mode:', voiceModeRef.current, 'MicPermission:', hasMicPermissionRef.current, 'Errors:', consecutiveErrorsRef.current);
+      
+      if (consecutiveErrorsRef.current >= 4) {
+        console.warn('[SAARTHI VOICE] Consecutive errors limit reached (4). Pausing auto-restart spin loop.');
+        setMicStatus('idle');
+        return;
+      }
+
       if (voiceModeRef.current !== 'off' && hasMicPermissionRef.current) {
+        const delay = consecutiveErrorsRef.current > 0 ? 1500 : 250;
         setTimeout(() => {
-          try { recognition.start(); } catch (e) {}
-        }, 150);
+          try {
+            if (recognitionRef.current && voiceModeRef.current !== 'off') {
+              recognitionRef.current.start();
+              console.log('[SAARTHI VOICE] Recognition restarted cleanly');
+            }
+          } catch (e: any) {
+            console.warn('[SAARTHI VOICE] Error restarting recognition:', e?.message || e);
+          }
+        }, delay);
       }
     };
 
@@ -238,8 +296,9 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
       voiceModeRef.current = 'wake_listen';
       setVoiceMode('wake_listen');
       setMicStatus('wake_listening');
+      console.log('[SAARTHI VOICE] Engine started in wake_listen mode');
     } catch (e) {
-      console.warn('Error starting speech engine:', e);
+      console.warn('[SAARTHI VOICE] Error starting speech engine:', e);
     }
   };
 

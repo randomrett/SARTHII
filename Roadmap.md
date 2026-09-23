@@ -68,4 +68,8 @@ This tracks what's built vs. what's left, based on the official SIH idea submiss
 ## Completed in latest session
 
 - [x] Fix voice wake-word activation ("Hey Saarthi" — renamed from "Hey Setu")
-- [x] Scaffold backend (FastAPI + PostgreSQL, auth, CRUD, ported matching algorithm)
+- [x] Instrument & root-cause voice wake-word state machine & stateless regex fix
+- [x] Restructure into multi-page app with `react-router-dom` (5 routes: `/`, `/dashboard`, `/schedule`, `/audit`, `/settings`)
+- [x] Centralize shared application state in `ScheduleContext`
+- [x] Scaffold backend (FastAPI + PostgreSQL, auth, CRUD, ported matching algorithm)
+
