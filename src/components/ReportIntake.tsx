@@ -24,8 +24,8 @@ const SAMPLE_REPORTS = [
   "Bituminous asphalt paving delayed in Section 1 due to heavy rainfall."
 ];
 
-// Phonetic Regex matching "Hey Setu" variations
-const DEFAULT_WAKE_WORD_REGEX = /\b(hey|hi|hello|ok|ay|hay|aay)?\s*(setu|cetu|situ|ctu|ctoo|saktu|citu|seetoo|seto|saytoo|shetoo|c2)\b/gi;
+// Phonetic Regex matching "Hey Saarthi" variations
+const DEFAULT_WAKE_WORD_REGEX = /\b(hey|hi|hello|ok|ay|hay|aay)?\s*(saarthi|sarthi|saarti|sarti|saathi|sarathi|sarthee|saarthee|saraty|saari|saari3|sari)\b/gi;
 
 // Human speech decibel threshold (% volume)
 const HUMAN_SPEECH_DECIBEL_THRESHOLD = 12; // Volumes <12% represent sub-human voice / silence
@@ -34,7 +34,7 @@ const SILENCE_FINISH_DURATION_MS = 1400; // 1.4 seconds of continuous silence to
 function sanitizeReportText(text: string): string {
   if (!text) return '';
   let result = text
-    .replace(/\b(hey|hi|hello|ok|ay|hay|aay)?\s*(setu|cetu|situ|ctu|ctoo|saktu|citu|seetoo|seto|saytoo|shetoo|c2)\b/gi, '')
+    .replace(/\b(hey|hi|hello|ok|ay|hay|aay)?\s*(saarthi|sarthi|saarti|sarti|saathi|sarathi|sarthee|saarthee|saraty|saari|saari3|sari)\b/gi, '')
     .replace(/^[\s,.-]+/, '')
     .trim();
 
@@ -46,17 +46,18 @@ function sanitizeReportText(text: string): string {
   return result;
 }
 
-function isFuzzySetuMatch(text: string): boolean {
+function isFuzzySaarthiMatch(text: string): boolean {
   const tokens = text.toLowerCase().split(/\s+/);
+  const exactVariants = [
+    'saarthi', 'sarthi', 'saarti', 'sarti', 'saathi', 'sarathi',
+    'sarthee', 'saarthee', 'sarati', 'sari', 'sarth'
+  ];
   for (const tok of tokens) {
-    if (tok === 'setu' || tok === 'ctu' || tok === 'cetu' || tok === 'situ') return true;
-    if (tok.length >= 3) {
-      let matchCount = 0;
-      if (tok.includes('s') || tok.includes('c')) matchCount++;
-      if (tok.includes('e') || tok.includes('i')) matchCount++;
-      if (tok.includes('t')) matchCount++;
-      if (tok.includes('u') || tok.includes('o')) matchCount++;
-      if (matchCount >= 3) return true;
+    if (exactVariants.includes(tok)) return true;
+    if (tok.length >= 4 && (tok.startsWith('s') || tok.startsWith('c'))) {
+      if ((tok.includes('ar') || tok.includes('aa')) && (tok.includes('th') || tok.includes('rt') || tok.includes('t')) && (tok.endsWith('i') || tok.endsWith('y') || tok.endsWith('ee'))) {
+        return true;
+      }
     }
   }
   return false;
@@ -81,12 +82,13 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
   const [trainerStep, setTrainerStep] = useState(1);
   const [trainerTranscripts, setTrainerTranscripts] = useState<string[]>([]);
   const [customPhrases, setCustomPhrases] = useState<string[]>(() => {
-    const saved = localStorage.getItem('setutrack_custom_wake_phrases');
+    const saved = localStorage.getItem('saarthi_custom_wake_phrases');
     return saved ? JSON.parse(saved) : [];
   });
 
   // Refs for VAD Decibel Engine & State Machine
   const voiceModeRef = useRef<'off' | 'wake_listen' | 'dictating'>('off');
+  const hasMicPermissionRef = useRef(false);
   const reportTextRef = useRef('');
   const customPhrasesRef = useRef<string[]>([]);
   const sensitivityRef = useRef<'high' | 'standard'>('high');
@@ -103,6 +105,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
   const mediaStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => { voiceModeRef.current = voiceMode; }, [voiceMode]);
+  useEffect(() => { hasMicPermissionRef.current = hasMicPermission; }, [hasMicPermission]);
   useEffect(() => { reportTextRef.current = reportText; }, [reportText]);
   useEffect(() => { customPhrasesRef.current = customPhrases; }, [customPhrases]);
   useEffect(() => { sensitivityRef.current = sensitivity; }, [sensitivity]);
@@ -122,7 +125,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
     const lower = transcript.toLowerCase();
     if (customPhrasesRef.current.some(phrase => lower.includes(phrase.toLowerCase()))) return true;
     if (DEFAULT_WAKE_WORD_REGEX.test(lower)) return true;
-    if (sensitivityRef.current === 'high' && isFuzzySetuMatch(lower)) return true;
+    if (sensitivityRef.current === 'high' && isFuzzySaarthiMatch(lower)) return true;
     return false;
   };
 
@@ -139,10 +142,12 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaStreamRef.current = stream;
         startAudioAnalysis(stream);
+        hasMicPermissionRef.current = true;
         setHasMicPermission(true);
       } catch (err) {
         console.warn('Mic permission error:', err);
         setMicStatus('denied');
+        hasMicPermissionRef.current = false;
         setHasMicPermission(false);
         return;
       }
@@ -167,7 +172,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
         // MODE A: WAKE WORD LISTENING
         if (voiceModeRef.current === 'wake_listen') {
           if (matchesWakeWord(rawTranscript)) {
-            console.log('⚡ WAKE WORD "HEY SETU" DETECTED AT INDEX:', i);
+            console.log('⚡ WAKE WORD "HEY SAARTHI" DETECTED AT INDEX:', i);
             
             wakeWordResultIndexRef.current = i + 1;
             voiceModeRef.current = 'dictating';
@@ -219,7 +224,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
     };
 
     recognition.onend = () => {
-      if (voiceModeRef.current !== 'off' && hasMicPermission) {
+      if (voiceModeRef.current !== 'off' && hasMicPermissionRef.current) {
         setTimeout(() => {
           try { recognition.start(); } catch (e) {}
         }, 150);
@@ -410,7 +415,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
             2. SITE REPORT INTAKE (DECIBEL VAD VOICE & TEXT)
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Say <strong className="text-cyan-300 font-extrabold">"Hey Setu"</strong> to dictate. Automatically auto-submits when voice volume drops below decibel speech levels!
+            Say <strong className="text-cyan-300 font-extrabold">"Hey Saarthi"</strong> to dictate. Automatically auto-submits when voice volume drops below decibel speech levels!
           </p>
         </div>
 
@@ -440,7 +445,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
               className="flex items-center gap-1.5 px-3 py-1 text-xs mono-font font-bold bg-amber-500 text-slate-950 hover:bg-amber-400 rounded-xs transition-all cursor-pointer shadow-[0_0_10px_rgba(255,159,28,0.4)] animate-pulse"
             >
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>ENABLE "HEY SETU" MIC ACCESS</span>
+              <span>ENABLE "HEY SAARTHI" MIC ACCESS</span>
             </button>
           ) : (
             <button
@@ -457,7 +462,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
           <div className="flex items-center gap-1.5 px-3 py-1 text-xs mono-font border border-cyan-400/60 bg-cyan-950 text-cyan-300 rounded-xs">
             <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
             <span>
-              MODE: {voiceMode === 'off' ? 'MIC OFF' : (voiceMode === 'wake_listen' ? 'LISTENING FOR "HEY SETU"' : 'DICTATING REPORT')}
+              MODE: {voiceMode === 'off' ? 'MIC OFF' : (voiceMode === 'wake_listen' ? 'LISTENING FOR "HEY SAARTHI"' : 'DICTATING REPORT')}
             </span>
           </div>
         </div>
@@ -468,7 +473,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
         <div className="mb-4 p-3.5 bg-cyan-950 border-2 border-cyan-400 rounded-xs text-xs mono-font text-cyan-200 flex items-center justify-between animate-bounce shadow-[0_0_20px_rgba(0,240,255,0.6)]">
           <div className="flex items-center gap-2.5">
             <Volume2 className="w-5 h-5 text-cyan-400" />
-            <span className="font-extrabold text-cyan-300 text-sm">⚡ WAKE WORD "HEY SETU" DETECTED! LISTENING FOR FIELD REPORT NOW...</span>
+            <span className="font-extrabold text-cyan-300 text-sm">⚡ WAKE WORD "HEY SAARTHI" DETECTED! LISTENING FOR FIELD REPORT NOW...</span>
           </div>
         </div>
       )}
@@ -511,8 +516,8 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
             required
             placeholder={
               hasMicPermission 
-                ? "Say 'Hey Setu' aloud anytime to dictate hands-free. Stops automatically when your voice volume drops below decibel speech levels..." 
-                : "Click 'ENABLE HEY SETU MIC ACCESS' above to start voice commands, or type field updates here..."
+                ? "Say 'Hey Saarthi' aloud anytime to dictate hands-free. Stops automatically when your voice volume drops below decibel speech levels..." 
+                : "Click 'ENABLE HEY SAARTHI MIC ACCESS' above to start voice commands, or type field updates here..."
             }
             value={reportText}
             onChange={(e) => setReportText(e.target.value)}
@@ -588,11 +593,11 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
             {hasMicPermission ? (
               <span className="text-[11px] text-cyan-400 mono-font flex items-center gap-1 animate-pulse">
                 <Radio className="w-3.5 h-3.5 text-cyan-400" />
-                Listening for wake word <strong className="text-amber-300">"Hey Setu"</strong>
+                Listening for wake word <strong className="text-amber-300">"Hey Saarthi"</strong>
               </span>
             ) : (
               <span className="text-[11px] text-amber-400 mono-font">
-                ⚠️ Click "ENABLE HEY SETU MIC ACCESS" above to activate hands-free mode
+                ⚠️ Click "ENABLE HEY SAARTHI MIC ACCESS" above to activate hands-free mode
               </span>
             )}
           </div>
@@ -634,7 +639,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
             <div className="flex justify-between items-center border-b border-cyan-500/30 pb-3">
               <h3 className="font-extrabold text-cyan-300 text-sm flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-cyan-400" />
-                CALIBRATE YOUR VOICE FOR "HEY SETU"
+                CALIBRATE YOUR VOICE FOR "HEY SAARTHI"
               </h3>
               <span className="text-[10px] text-amber-400 border border-amber-500/40 px-1.5 py-0.5 rounded-xs">
                 STEP {trainerStep} OF 3
@@ -644,13 +649,13 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
             {trainerStep <= 3 ? (
               <div className="space-y-4 text-center py-4">
                 <p className="text-slate-200">
-                  Please speak <strong className="text-amber-300 text-base block my-1">"Hey Setu"</strong> into your microphone now ({trainerStep}/3).
+                  Please speak <strong className="text-amber-300 text-base block my-1">"Hey Saarthi"</strong> into your microphone now ({trainerStep}/3).
                 </p>
                 <div className="w-16 h-16 rounded-full bg-cyan-950 border-2 border-cyan-400 text-cyan-400 flex items-center justify-center mx-auto animate-pulse shadow-[0_0_15px_rgba(0,240,255,0.4)]">
                   <Mic className="w-8 h-8" />
                 </div>
                 <p className="text-[11px] text-slate-400 italic">
-                  SetuTrack is listening to calibrate your voice and accent pattern...
+                  Saarthi engine is listening to calibrate your voice and accent pattern...
                 </p>
                 <button
                   type="button"
