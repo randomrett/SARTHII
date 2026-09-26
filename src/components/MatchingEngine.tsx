@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle, Cpu, Gauge, ChevronRight, ArrowRight, Sparkles, Zap } from 'lucide-react';
 import type { Activity, MatchResult } from '../types';
 
@@ -11,7 +11,19 @@ export const MatchingEngine: React.FC<MatchingEngineProps> = ({
   matchResults,
   activities
 }) => {
-  if (!matchResults || matchResults.length === 0) {
+  const topMatch = matchResults && matchResults.length > 0 ? matchResults[0] : null;
+
+  const [selectedActivityId, setSelectedActivityId] = useState<string>(topMatch ? topMatch.activity.id : '');
+  const [customProgress, setCustomProgress] = useState<number>(topMatch ? topMatch.extractedProgress : 0);
+
+  useEffect(() => {
+    if (topMatch) {
+      setSelectedActivityId(topMatch.activity.id);
+      setCustomProgress(topMatch.extractedProgress);
+    }
+  }, [topMatch]);
+
+  if (!matchResults || matchResults.length === 0 || !topMatch) {
     return (
       <section className="blueprint-card p-6 rounded-sm text-center">
         <div className="max-w-md mx-auto py-8">
@@ -27,219 +39,145 @@ export const MatchingEngine: React.FC<MatchingEngineProps> = ({
     );
   }
 
-  const topMatch = matchResults[0];
-  const [selectedActivityId, setSelectedActivityId] = useState<string>(topMatch.activity.id);
-  const [customProgress, setCustomProgress] = useState<number>(topMatch.extractedProgress);
-
-  // Sync state if topMatch changes
-  React.useEffect(() => {
-    if (topMatch) {
-      setSelectedActivityId(topMatch.activity.id);
-      setCustomProgress(topMatch.extractedProgress);
-    }
-  }, [topMatch]);
-
   const activeTargetActivity = activities.find(a => a.id === selectedActivityId) || topMatch.activity;
 
   return (
     <section className="blueprint-card p-5 rounded-sm border-cyan-400">
-      
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-cyan-500/20 pb-4 mb-5">
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 mb-5 border-b border-cyan-500/30 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold text-cyan-300 mono-font flex items-center gap-2">
-              <Gauge className="w-5 h-5 text-cyan-400" />
-              3. AUTONOMOUS MATCH ANALYSIS & EVALUATION
+            <span className="w-2.5 h-2.5 bg-cyan-400 rounded-full shadow-[0_0_10px_#00f0ff] animate-pulse"></span>
+            <h2 className="text-lg font-bold text-cyan-300 mono-font uppercase">
+              2. HEURISTIC & SEMANTIC MATCH BREAKDOWN
             </h2>
           </div>
           <p className="text-xs text-slate-400 mt-0.5">
-            Real-time NLP entity extraction and sub-score metrics automatically synchronized with the baseline schedule.
+            Real-time entity extraction, location validation, and confidence sub-scores.
           </p>
         </div>
 
-        {/* Confidence Stamp */}
-        <div className="blueprint-stamp">
-          AUTONOMOUS AUTO-UPDATED
-        </div>
+        {topMatch.isHighConfidence ? (
+          <div className="flex items-center gap-2 bg-emerald-950/80 border border-emerald-500/50 px-3 py-1.5 rounded-xs text-emerald-300 text-xs mono-font">
+            <Sparkles className="w-4 h-4 text-emerald-400 animate-spin-slow" />
+            <span className="font-bold">HIGH CONFIDENCE MATCH ({topMatch.overallConfidence}%)</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 bg-amber-950/80 border border-amber-500/50 px-3 py-1.5 rounded-xs text-amber-300 text-xs mono-font">
+            <Zap className="w-4 h-4 text-amber-400" />
+            <span className="font-bold">LOW CONFIDENCE — MANUAL REVIEW ({topMatch.overallConfidence}%)</span>
+          </div>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* LEFT / MAIN CANDIDATE CARD (Col 7) */}
-        <div className="lg:col-span-7 space-y-4">
-          
-          {/* Top Activity Card */}
-          <div className="bg-slate-950 p-4 border border-cyan-500/30 rounded-xs space-y-3 relative overflow-hidden">
-            
-            <div className="flex justify-between items-start">
-              <div>
-                <span className="text-[10px] text-cyan-400 mono-font font-bold block uppercase">AUTOMATICALLY MATCHED ACTIVITY</span>
-                <h3 className="text-base font-extrabold text-slate-100 mono-font">{activeTargetActivity.name}</h3>
-                <div className="flex items-center gap-2 mt-1 text-xs mono-font">
-                  <span className="px-2 py-0.5 bg-slate-900 border border-slate-700 text-amber-300 rounded-xs">
-                    {activeTargetActivity.zone}
-                  </span>
-                  <span className="text-slate-400">ID: {activeTargetActivity.id}</span>
-                </div>
-              </div>
-
-              {/* Confidence Gauge */}
-              <div className="text-right">
-                <span className="text-[10px] text-slate-400 mono-font block">OVERALL CONFIDENCE</span>
-                <div className={`text-2xl font-black mono-font ${topMatch.overallConfidence >= 78 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                  {topMatch.overallConfidence}%
-                </div>
-              </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* TOP MATCH & REASONING CARD */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="bg-slate-950/90 border border-cyan-500/30 p-4 rounded-xs">
+            <div className="flex items-center justify-between text-xs mono-font mb-2">
+              <span className="text-slate-400 uppercase tracking-wider">MATCHED TARGET ACTIVITY</span>
+              <span className="text-cyan-400 font-bold">{activeTargetActivity.id}</span>
             </div>
-
-            {/* Extracted Entities Tag Pills */}
-            <div className="pt-2 border-t border-cyan-500/10 flex flex-wrap gap-2 text-[11px] mono-font">
-              <span className="bg-cyan-950/80 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded-xs flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-cyan-400" /> Extracted Target Progress: {topMatch.extractedProgress}%
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              {activeTargetActivity.name}
+              <span className="text-xs px-2 py-0.5 bg-slate-900 border border-slate-700 text-amber-300 rounded-xs mono-font">
+                {activeTargetActivity.zone}
               </span>
-              {topMatch.extractedEntities.zoneKeyword && (
-                <span className="bg-amber-950/80 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-xs">
-                  Zone Keyword: "{topMatch.extractedEntities.zoneKeyword}"
-                </span>
-              )}
-              {topMatch.extractedEntities.isDelayMention && (
-                <span className="bg-crimson-950/80 text-crimson-300 border border-crimson-500/30 px-2 py-0.5 rounded-xs">
-                  ⚠️ Delay Note Flagged
-                </span>
-              )}
-            </div>
+            </h3>
 
-            {/* Progress Delta Preview */}
-            <div className="bg-slate-900/90 p-3 border border-cyan-500/20 rounded-xs text-xs mono-font space-y-2">
-              <span className="text-[10px] text-cyan-400 font-bold block">SCHEDULE PROGRESS AUTOMATICALLY APPLIED:</span>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400">Previous Baseline:</span>
-                  <span className="font-bold text-slate-200">{topMatch.activity.progress}%</span>
-                </div>
-                <ArrowRight className="w-4 h-4 text-cyan-400" />
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400">Updated Baseline:</span>
-                  <span className="font-extrabold text-emerald-400">{customProgress}%</span>
-                </div>
-              </div>
+            {/* REASONING SUMMARY */}
+            <div className="mt-3 p-3 bg-cyan-950/30 border border-cyan-500/20 rounded-xs text-xs text-cyan-200">
+              <span className="font-bold block text-cyan-400 mb-1 mono-font">MATCHING ALGORITHM REASONING:</span>
+              <p className="leading-relaxed">{topMatch.reasoning}</p>
             </div>
-
-            {/* AI Reasoning Text */}
-            <p className="text-xs text-slate-300 italic mono-font bg-cyan-950/20 p-2.5 border-l-2 border-cyan-400">
-              "{topMatch.reasoning}"
-            </p>
           </div>
 
-          {/* AUTONOMOUS EXECUTION STATUS BADGE (NO MANUAL BUTTONS NEEDED) */}
-          <div className="bg-emerald-950/70 border border-emerald-400/80 p-3.5 rounded-xs text-xs mono-font text-emerald-300 flex items-center justify-between gap-3 shadow-[0_0_12px_rgba(16,185,129,0.25)]">
-            <div className="flex items-center gap-2.5">
-              <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
-              <div>
-                <span className="font-extrabold block text-emerald-200">AUTOMATICALLY APPROVED & SCHEDULE SYNCED</span>
-                <span className="text-[11px] text-slate-300">The schedule builder was automatically updated without human intervention.</span>
-              </div>
-            </div>
-            <span className="text-[10px] font-bold text-emerald-950 bg-emerald-400 px-2 py-1 rounded-xs uppercase shrink-0 flex items-center gap-1">
-              <Zap className="w-3 h-3 fill-slate-950" /> ZERO TOUCH
-            </span>
-          </div>
-
-        </div>
-
-        {/* RIGHT SUB-SCORE BREAKDOWN METRICS (Col 5) */}
-        <div className="lg:col-span-5 space-y-4">
-          <div className="bg-slate-950 p-4 border border-cyan-500/30 rounded-xs space-y-4">
-            <h4 className="text-xs font-bold text-cyan-400 mono-font border-b border-cyan-500/20 pb-2">
-              SUB-SCORE BREAKDOWN (ALGORITHMIC RATING)
+          {/* SUB-SCORE METRIC BARS */}
+          <div className="bg-slate-950/90 border border-cyan-500/30 p-4 rounded-xs space-y-3 text-xs mono-font">
+            <h4 className="font-bold text-cyan-300 uppercase flex items-center gap-2 mb-3">
+              <Gauge className="w-4 h-4 text-cyan-400" /> CONFIDENCE SUB-SCORE BREAKDOWN
             </h4>
 
-            {/* Sub-Score 1: Semantic Match */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs mono-font">
-                <span className="text-slate-300">Wording / Semantic Match</span>
+            {/* 1. SEMANTIC MATCH (50%) */}
+            <div>
+              <div className="flex justify-between text-slate-300 mb-1">
+                <span>SEMANTIC & SYNONYM OVERLAP (50% WEIGHT)</span>
                 <span className="font-bold text-cyan-300">{topMatch.subScores.semanticMatch}%</span>
               </div>
-              <div className="h-2 bg-slate-900 border border-cyan-500/20 rounded-xs overflow-hidden">
+              <div className="w-full bg-slate-900 border border-slate-700 h-2 rounded-xs overflow-hidden">
                 <div
-                  className="h-full bg-cyan-400 transition-all duration-500"
+                  className="bg-cyan-400 h-full rounded-xs transition-all duration-500"
                   style={{ width: `${topMatch.subScores.semanticMatch}%` }}
                 ></div>
               </div>
             </div>
 
-            {/* Sub-Score 2: Location Match */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs mono-font">
-                <span className="text-slate-300">Location / Zone Match</span>
+            {/* 2. LOCATION MATCH (35%) */}
+            <div>
+              <div className="flex justify-between text-slate-300 mb-1">
+                <span>ZONE / LOCATION EXTRACTION (35% WEIGHT)</span>
                 <span className="font-bold text-amber-300">{topMatch.subScores.locationMatch}%</span>
               </div>
-              <div className="h-2 bg-slate-900 border border-cyan-500/20 rounded-xs overflow-hidden">
+              <div className="w-full bg-slate-900 border border-slate-700 h-2 rounded-xs overflow-hidden">
                 <div
-                  className="h-full bg-amber-400 transition-all duration-500"
+                  className="bg-amber-400 h-full rounded-xs transition-all duration-500"
                   style={{ width: `${topMatch.subScores.locationMatch}%` }}
                 ></div>
               </div>
             </div>
 
-            {/* Sub-Score 3: Date & Sequence Plausibility */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs mono-font">
-                <span className="text-slate-300">Date / Sequence Plausibility</span>
+            {/* 3. DATE PLAUSIBILITY (15%) */}
+            <div>
+              <div className="flex justify-between text-slate-300 mb-1">
+                <span>SCHEDULE STATUS PLAUSIBILITY (15% WEIGHT)</span>
                 <span className="font-bold text-emerald-300">{topMatch.subScores.datePlausibility}%</span>
               </div>
-              <div className="h-2 bg-slate-900 border border-cyan-500/20 rounded-xs overflow-hidden">
+              <div className="w-full bg-slate-900 border border-slate-700 h-2 rounded-xs overflow-hidden">
                 <div
-                  className="h-full bg-emerald-400 transition-all duration-500"
+                  className="bg-emerald-400 h-full rounded-xs transition-all duration-500"
                   style={{ width: `${topMatch.subScores.datePlausibility}%` }}
                 ></div>
               </div>
             </div>
-
-            {/* Sub-Score 4: Progress Extraction */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-xs mono-font">
-                <span className="text-slate-300">Progress Extraction Confidence</span>
-                <span className="font-bold text-purple-300">{topMatch.subScores.progressConfidence}%</span>
-              </div>
-              <div className="h-2 bg-slate-900 border border-cyan-500/20 rounded-xs overflow-hidden">
-                <div
-                  className="h-full bg-purple-400 transition-all duration-500"
-                  style={{ width: `${topMatch.subScores.progressConfidence}%` }}
-                ></div>
-              </div>
-            </div>
           </div>
-
-          {/* ALTERNATIVE RANKED MATCHES */}
-          {matchResults.length > 1 && (
-            <div className="bg-slate-950 p-4 border border-cyan-500/20 rounded-xs space-y-2">
-              <span className="text-[10px] text-slate-400 mono-font font-bold block uppercase">
-                OTHER RANKED SCHEDULE MATCHES:
-              </span>
-              <div className="space-y-1.5">
-                {matchResults.slice(1, 3).map((res) => (
-                  <div
-                    key={res.activity.id}
-                    className="flex items-center justify-between p-2 bg-slate-900 border border-slate-800 rounded-xs text-xs mono-font"
-                  >
-                    <div>
-                      <span className="text-slate-300 font-semibold">{res.activity.name}</span>
-                      <span className="text-[10px] text-amber-400 ml-2">({res.activity.zone})</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-cyan-400 font-bold">{res.overallConfidence}%</span>
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
         </div>
 
+        {/* CANDIDATE CANDIDATE RANKINGS */}
+        <div className="bg-slate-950/90 border border-cyan-500/30 p-4 rounded-xs flex flex-col">
+          <h4 className="font-bold text-cyan-300 text-xs mono-font uppercase mb-3 flex items-center justify-between border-b border-cyan-500/20 pb-2">
+            <span>CANDIDATE RANKINGS</span>
+            <span className="text-slate-400 text-[10px]">{matchResults.length} EVALUATED</span>
+          </h4>
+
+          <div className="space-y-2 overflow-y-auto max-h-72 pr-1 flex-1">
+            {matchResults.map((result, idx) => (
+              <div
+                key={result.activity.id}
+                onClick={() => {
+                  setSelectedActivityId(result.activity.id);
+                  setCustomProgress(result.extractedProgress);
+                }}
+                className={`p-2.5 rounded-xs border text-xs mono-font transition-all cursor-pointer ${
+                  selectedActivityId === result.activity.id
+                    ? 'bg-cyan-950/60 border-cyan-400 text-cyan-200 shadow-[0_0_8px_rgba(0,240,255,0.2)]'
+                    : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:border-slate-700 hover:text-slate-200'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-200">#{idx + 1} {result.activity.name}</span>
+                  <span className={`font-bold ${result.overallConfidence >= 78 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {result.overallConfidence}%
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between text-[10px] mt-1 text-slate-400">
+                  <span>{result.activity.zone}</span>
+                  <span>Target: {result.extractedProgress}%</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   );

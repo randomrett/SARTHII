@@ -26,10 +26,10 @@ This tracks what's built vs. what's left, based on the official SIH idea submiss
 
 ## 📥 Data capture (unifying scattered inputs — the core problem statement)
 
-- [ ] Photo/scanned-document upload + OCR extraction (Tesseract per deck)
-- [ ] Video upload handling
-- [ ] Excel file ingestion for ad-hoc reports
-- [ ] Baseline schedule import from Primavera P6 / MS Project / Excel (currently only hardcoded presets)
+- [x] Photo/scanned-document upload + OCR extraction (Gemini Vision OCR & defect detection)
+- [x] Video upload handling (Gemini Vision keyframes & video analysis)
+- [x] Excel file ingestion for ad-hoc reports
+- [x] Baseline schedule import from Primavera P6 / MS Project / Excel
 - [ ] Server-side voice transcription via Whisper (currently only browser SpeechRecognition, English-only)
 - [ ] Multilingual voice support (deck promises this for field adoption)
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Calendar, Table, BarChart3, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Calendar, Table, BarChart3, CheckCircle2, Clock, AlertTriangle, Upload, FileSpreadsheet, AlertCircle, X } from 'lucide-react';
 import type { Activity, ActivityStatus } from '../types';
+import { useScheduleContext } from '../context/ScheduleContext';
 
 interface ScheduleBuilderProps {
   activities: Activity[];
@@ -15,9 +16,86 @@ export const ScheduleBuilder: React.FC<ScheduleBuilderProps> = ({
   onUpdateActivity,
   onDeleteActivity
 }) => {
+  const { handleImportSchedule } = useScheduleContext();
   const [viewMode, setViewMode] = useState<'table' | 'gantt'>('table');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+
+  // Import Schedule Modal State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importSummary, setImportSummary] = useState<{
+    imported_count: number;
+    rejected_count: number;
+    rejected: Array<{ row: number; reason: string }>;
+  } | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fname = file.name.toLowerCase();
+    if (fname.endsWith('.mpp') || fname.endsWith('.xer')) {
+      setImportError(
+        'Native MS Project (.mpp) and Primavera P6 (.xer) binary files are not supported directly. Please export your schedule to Excel (.xlsx) or CSV format from P6 / MS Project first.'
+      );
+      setImportFile(null);
+      return;
+    }
+
+    setImportFile(file);
+    setImportError(null);
+    setImportSummary(null);
+  };
+
+  const handleScheduleUpload = async () => {
+    if (!importFile) return;
+
+    setIsUploading(true);
+    setImportError(null);
+    setImportSummary(null);
+
+    const formData = new FormData();
+    formData.append('file', importFile);
+
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/schedule/import', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to import schedule spreadsheet');
+      }
+
+      setImportSummary({
+        imported_count: data.imported_count,
+        rejected_count: data.rejected_count,
+        rejected: data.rejected || []
+      });
+
+      if (data.accepted && data.accepted.length > 0) {
+        const mappedActivities: Activity[] = data.accepted.map((a: any) => ({
+          id: a.id,
+          name: a.name,
+          zone: a.zone,
+          category: a.category || 'Civil',
+          plannedStart: a.planned_start,
+          plannedEnd: a.planned_end,
+          progress: a.progress,
+          status: a.status
+        }));
+        handleImportSchedule(mappedActivities);
+      }
+    } catch (err: any) {
+      setImportError(err.message || 'An error occurred during schedule import.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   // Form State
   const [formData, setFormData] = useState({
@@ -147,6 +225,19 @@ export const ScheduleBuilder: React.FC<ScheduleBuilderProps> = ({
               <BarChart3 className="w-3.5 h-3.5" /> Gantt Timeline
             </button>
           </div>
+
+          {/* Import Schedule Button */}
+          <button
+            onClick={() => {
+              setImportFile(null);
+              setImportError(null);
+              setImportSummary(null);
+              setIsImportModalOpen(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold mono-font bg-emerald-500/20 text-emerald-300 border border-emerald-400 hover:bg-emerald-500/30 transition-all rounded-xs cursor-pointer shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+          >
+            <Upload className="w-4 h-4" /> Import Schedule
+          </button>
 
           {/* Add Activity Button */}
           <button
@@ -384,6 +475,113 @@ export const ScheduleBuilder: React.FC<ScheduleBuilderProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* IMPORT SCHEDULE MODAL */}
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="blueprint-card max-w-xl w-full p-6 rounded-sm border-emerald-400 shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-emerald-500/30">
+              <h3 className="text-lg font-bold text-emerald-300 mono-font flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5" />
+                IMPORT BASELINE SCHEDULE (Excel / CSV)
+              </h3>
+              <button
+                onClick={() => setIsImportModalOpen(false)}
+                className="text-slate-400 hover:text-slate-200 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs mono-font">
+              <p className="text-slate-300">
+                Upload your Primavera P6 / MS Project exported schedule file (<code className="text-emerald-300">.xlsx</code> or <code className="text-emerald-300">.csv</code>).
+              </p>
+
+              {/* Upload Input Box */}
+              <div className="border-2 border-dashed border-emerald-500/40 hover:border-emerald-400 bg-slate-950/60 p-6 rounded-xs text-center">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv,.mpp,.xer"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  id="schedule-file-input"
+                />
+                <label htmlFor="schedule-file-input" className="cursor-pointer block space-y-2">
+                  <Upload className="w-8 h-8 text-emerald-400 mx-auto" />
+                  <span className="text-slate-200 font-semibold block">
+                    {importFile ? importFile.name : 'Click or drop exported schedule file (.xlsx / .csv)'}
+                  </span>
+                  <span className="text-[11px] text-slate-400 block">
+                    Supported: Excel (.xlsx), CSV (.csv). Note: .mpp / .xer binary files must be exported to Excel first.
+                  </span>
+                </label>
+              </div>
+
+              {/* ERROR MESSAGE / REGEX WARNING */}
+              {importError && (
+                <div className="bg-crimson-950/80 border border-crimson-500/50 p-3 rounded-xs text-crimson-300 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-crimson-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold block">Import Error</span>
+                    <span>{importError}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* SUCCESS / ACCEPTED / REJECTED SUMMARY */}
+              {importSummary && (
+                <div className="space-y-2 bg-slate-900 border border-emerald-500/30 p-3 rounded-xs">
+                  <div className="flex items-center justify-between font-bold text-emerald-300">
+                    <span>Import Complete</span>
+                    <span>{importSummary.imported_count} Activities Imported</span>
+                  </div>
+                  {importSummary.rejected_count > 0 && (
+                    <div className="mt-2 text-amber-300 space-y-1">
+                      <span className="font-bold block text-[11px]">{importSummary.rejected_count} Rejected Row(s):</span>
+                      <ul className="max-h-24 overflow-y-auto space-y-1 text-[10px] bg-slate-950 p-2 rounded-xs border border-amber-500/20">
+                        {importSummary.rejected.map((rej, i) => (
+                          <li key={i}>Row {rej.row}: {rej.reason}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* MODAL ACTIONS */}
+              <div className="flex justify-end gap-3 pt-3 border-t border-emerald-500/20">
+                <button
+                  type="button"
+                  onClick={() => setIsImportModalOpen(false)}
+                  className="px-4 py-2 border border-slate-700 text-slate-400 hover:text-slate-200 rounded-xs cursor-pointer"
+                >
+                  CLOSE
+                </button>
+                <button
+                  type="button"
+                  disabled={!importFile || isUploading}
+                  onClick={handleScheduleUpload}
+                  className={`px-5 py-2 font-bold rounded-xs cursor-pointer flex items-center gap-2 ${
+                    !importFile || isUploading
+                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                      : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.4)]'
+                  }`}
+                >
+                  {isUploading ? (
+                    <>
+                      <Clock className="w-4 h-4 animate-spin" /> UPLOADING...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" /> UPLOAD & IMPORT SCHEDULE
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

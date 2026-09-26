@@ -15,6 +15,8 @@ class AuditRecord(Base):
     newProgress = Column("new_progress", Float, nullable=False)
     confidenceScore = Column("confidence_score", Float, nullable=False)
     subScores = Column("sub_scores", JSON, nullable=True)
-    status = Column(String, nullable=False) # auto_approved, manually_approved, corrected, rejected
+    status = Column(String, nullable=False) # auto_approved, manually_approved, corrected, rejected, pending_review
     notes = Column(Text, nullable=True)
+    filePath = Column("file_path", String, nullable=True)
+    mediaUrl = Column("media_url", String, nullable=True)
     timestamp = Column(String, nullable=False)

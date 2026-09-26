@@ -11,6 +11,9 @@ class Report(Base):
     project_id = Column(String, ForeignKey("projects.id"), nullable=True)
     raw_text = Column(Text, nullable=False)
     submitted_by = Column(String, nullable=True)
+    file_path = Column(String, nullable=True)
+    file_type = Column(String, nullable=True) # text, document, excel, image, video
+    media_url = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     project = relationship("Project", back_populates="reports")

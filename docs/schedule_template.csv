@@ -1,0 +1,7 @@
+activity_name,category,zone,planned_start,planned_end,status,unit,quantity
+Diaphragm Wall & Piling,Substructure,Zone A,2026-01-01,2026-03-31,completed,panels,24
+Mass Excavation & Earthworks,Civil,Zone A,2026-02-01,2026-04-30,in_progress,cu.m,10000
+Raft Foundation Reinforcement & Pour,Concrete,Zone A,2026-04-01,2026-06-30,in_progress,cu.m,2500
+Base Slab Casting,Concrete,Zone B,2026-05-01,2026-07-31,not_started,cu.m,3000
+Pier & Column Casting,Structure,Pier 4,2026-06-01,2026-08-31,in_progress,nos,12
+Facade Glazing & Curtain Wall,Finishes,Tower 1,2026-09-01,2026-11-30,not_started,sq.m,5000

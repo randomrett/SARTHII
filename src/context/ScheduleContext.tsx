@@ -34,6 +34,7 @@ interface ScheduleContextType {
   handleAddActivity: (newAct: Activity) => void;
   handleUpdateActivity: (updatedAct: Activity) => void;
   handleDeleteActivity: (id: string) => void;
+  handleImportSchedule: (newActivities: Activity[]) => void;
   handleSubmitReport: (reportText: string) => void;
   handleClearAudit: () => void;
   setAutoApproveMode: React.Dispatch<React.SetStateAction<boolean>>;
@@ -86,6 +87,13 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const handleDeleteActivity = (id: string) => {
     setActivities(prev => prev.filter(a => a.id !== id));
+  };
+
+  const handleImportSchedule = (newActivities: Activity[]) => {
+    setActivities(newActivities);
+    setMatchResults(null);
+    setLastAutoUpdateNotification(null);
+    setLatestMatchSummary(null);
   };
 
   const handleSubmitReport = (reportText: string) => {
@@ -186,6 +194,7 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       handleAddActivity,
       handleUpdateActivity,
       handleDeleteActivity,
+      handleImportSchedule,
       handleSubmitReport,
       handleClearAudit,
       setAutoApproveMode,
