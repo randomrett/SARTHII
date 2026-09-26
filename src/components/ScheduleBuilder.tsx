@@ -243,9 +243,9 @@ export const ScheduleBuilder: React.FC<ScheduleBuilderProps> = ({
           {/* Add Activity Button */}
           <button
             onClick={openAddModal}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold font-mono bg-primary text-on-primary hover:opacity-90 transition-all rounded-lg cursor-pointer shadow-xs"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-extrabold font-mono bg-slate-900 text-white hover:bg-slate-800 transition-all rounded-lg cursor-pointer shadow-xs"
           >
-            <Plus className="w-4 h-4" /> Add Activity
+            <Plus className="w-4 h-4 text-emerald-400" /> <span className="text-white">Add Activity</span>
           </button>
         </div>
       </div>
@@ -467,7 +467,7 @@ export const ScheduleBuilder: React.FC<ScheduleBuilderProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-primary text-on-primary font-bold hover:opacity-90 rounded-lg transition-colors cursor-pointer font-mono shadow-xs"
+                  className="px-5 py-2 bg-slate-900 text-white font-extrabold hover:bg-slate-800 rounded-lg transition-colors cursor-pointer font-mono shadow-xs"
                 >
                   {editingActivity ? 'SAVE CHANGES' : 'CREATE ACTIVITY'}
                 </button>

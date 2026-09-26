@@ -41,10 +41,11 @@ export interface MatchResult {
   isHighConfidence: boolean;
 }
 
-export type ApprovalStatus = 'auto_approved' | 'manually_approved' | 'corrected' | 'rejected';
+export type ApprovalStatus = 'auto_approved' | 'manually_approved' | 'corrected' | 'rejected' | 'pending_review';
 
 export interface AuditRecord {
   id: string;
+  report_id?: string;
   timestamp: string;
   reportText: string;
   matchedActivityId: string;

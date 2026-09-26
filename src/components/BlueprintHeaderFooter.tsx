@@ -42,7 +42,7 @@ export const BlueprintHeader: React.FC<HeaderProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-black tracking-wider text-cyan-400 mono-font">
-                SETUTRACK <span className="text-amber-400 text-sm font-semibold tracking-normal px-2 py-0.5 border border-amber-400/50 bg-amber-950/40 rounded-xs">AUTONOMOUS ENGINE v3.5</span>
+                SAARTHI <span className="text-amber-400 text-sm font-semibold tracking-normal px-2 py-0.5 border border-amber-400/50 bg-amber-950/40 rounded-xs">AUTONOMOUS ENGINE v3.5</span>
               </h1>
             </div>
             <p className="text-xs text-slate-400 mono-font mt-0.5 flex items-center gap-2">
@@ -125,7 +125,7 @@ export const BlueprintHeader: React.FC<HeaderProps> = ({
             <div>
               <p className="font-semibold text-amber-300">Dual AI Engine Configuration</p>
               <p className="text-[11px] text-slate-400">
-                SetuTrack automatically runs pure client-side NLP fuzzy matching offline. You may optionally toggle Gemini API inference.
+                SAARTHI automatically runs pure client-side NLP fuzzy matching offline. You may optionally toggle Gemini API inference.
               </p>
             </div>
           </div>

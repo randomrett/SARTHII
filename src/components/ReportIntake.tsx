@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Mic, MicOff, Sparkles, Activity as PulseIcon, AlertCircle, Radio, Volume2, ShieldCheck, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Send, Mic, Sparkles, Activity as PulseIcon, AlertCircle, Radio, Volume2, ShieldCheck, ShieldAlert, CheckCircle2, Square } from 'lucide-react';
 import { normalizeSpokenReport } from '../utils/constructionPhonetics';
-
 
 interface ReportIntakeProps {
   onSubmitReport: (reportText: string) => void;
@@ -25,7 +24,7 @@ const SAMPLE_REPORTS = [
   "Bituminous asphalt paving delayed in Section 1 due to heavy rainfall."
 ];
 
-// Phonetic Regex matching "Hey Saarthi" variations (stateless helper function)
+// Phonetic Regex matching "Hey Saarthi" variations
 const DEFAULT_WAKE_WORD_PATTERN = '\\b(hey|hi|hello|ok|ay|hay|aay)?\\s*(saarthi|sarthi|saarti|sarti|saathi|sarathi|sarthee|saarthee|saraty|saari|saari3|sari)\\b';
 
 function isRegexWakeMatch(text: string): boolean {
@@ -35,8 +34,8 @@ function isRegexWakeMatch(text: string): boolean {
 }
 
 // Human speech decibel threshold (% volume)
-const HUMAN_SPEECH_DECIBEL_THRESHOLD = 12; // Volumes <12% represent sub-human voice / silence
-const SILENCE_FINISH_DURATION_MS = 1400; // 1.4 seconds of continuous silence to auto-finish
+const HUMAN_SPEECH_DECIBEL_THRESHOLD = 12;
+const SILENCE_FINISH_DURATION_MS = 1400;
 
 function sanitizeReportText(text: string): string {
   if (!text) return '';
@@ -82,7 +81,6 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
   const [micStatus, setMicStatus] = useState<'idle' | 'listening' | 'wake_listening' | 'denied' | 'unsupported'>('idle');
   const [audioWaveform, setAudioWaveform] = useState<number[]>([15, 30, 60, 40, 80, 50, 90, 30, 20]);
   const [decibelLevel, setDecibelLevel] = useState<number>(0);
-  const [interimTranscript, setInterimTranscript] = useState('');
   const [sensitivity, setSensitivity] = useState<'high' | 'standard'>('high');
 
   // Voice Trainer State
@@ -94,20 +92,15 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Refs for VAD Decibel Engine & State Machine
+  // Refs for State Machine & Media Streams
   const voiceModeRef = useRef<'off' | 'wake_listen' | 'dictating'>('off');
   const hasMicPermissionRef = useRef(false);
   const reportTextRef = useRef('');
   const customPhrasesRef = useRef<string[]>([]);
   const sensitivityRef = useRef<'high' | 'standard'>('high');
-  const wakeWordResultIndexRef = useRef<number>(0);
   const isProcessingRef = useRef(false);
 
-  // Diagnostic Error Tracker Refs
-  const consecutiveErrorsRef = useRef<number>(0);
-  const lastErrorRef = useRef<string>('');
-
-  // MediaRecorder & Whisper Refs
+  // MediaRecorder & Whisper Audio Recording Refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const [isTranscribingWhisper, setIsTranscribingWhisper] = useState(false);
@@ -120,57 +113,28 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
   const trainerRecognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  const interimTranscriptRef = useRef('');
 
   useEffect(() => { 
     console.log('[SAARTHI VOICE STATE] Voice mode changed:', voiceModeRef.current, '->', voiceMode);
-    voiceModeRef.current = voiceMode; 
-
-    // Start MediaRecorder audio capture when entering dictating mode
-    if (voiceMode === 'dictating' && mediaStreamRef.current) {
-      try {
-        audioChunksRef.current = [];
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4');
-        
-        const recorder = new MediaRecorder(mediaStreamRef.current, { mimeType });
-        recorder.ondataavailable = (event) => {
-          if (event.data && event.data.size > 0) {
-            audioChunksRef.current.push(event.data);
-          }
-        };
-        recorder.start(250);
-        mediaRecorderRef.current = recorder;
-        console.log('[SAARTHI WHISPER RECORDER] Started recording audio chunks (mimeType:', mimeType, ')');
-      } catch (err) {
-        console.warn('[SAARTHI WHISPER RECORDER] Could not start MediaRecorder:', err);
-      }
-    }
+    voiceModeRef.current = voiceMode;
   }, [voiceMode]);
 
   useEffect(() => { hasMicPermissionRef.current = hasMicPermission; }, [hasMicPermission]);
   useEffect(() => { reportTextRef.current = reportText; }, [reportText]);
-  useEffect(() => { interimTranscriptRef.current = interimTranscript; }, [interimTranscript]);
   useEffect(() => { customPhrasesRef.current = customPhrases; }, [customPhrases]);
   useEffect(() => { sensitivityRef.current = sensitivity; }, [sensitivity]);
   useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
 
-  // Initial Diagnostic Permission Check
+  // Check initial microphone permissions
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    console.log('[SAARTHI VOICE DIAGNOSTIC] SpeechRecognition available:', !!SpeechRecognition, typeof SpeechRecognition);
+    console.log('[SAARTHI VOICE DIAGNOSTIC] SpeechRecognition available:', !!SpeechRecognition);
 
     if (navigator.permissions && navigator.permissions.query) {
       navigator.permissions.query({ name: 'microphone' as any }).then((permissionStatus) => {
-        console.log('[SAARTHI VOICE PERMISSION DIAGNOSTIC] Status:', permissionStatus.state);
         if (permissionStatus.state === 'granted') {
           setHasMicPermission(true);
           hasMicPermissionRef.current = true;
-          // Auto-start listening if mic permission was already granted
-          if (voiceModeRef.current === 'off') {
-            startUnifiedSpeechEngine();
-          }
         } else if (permissionStatus.state === 'denied') {
           setHasMicPermission(false);
           hasMicPermissionRef.current = false;
@@ -178,12 +142,10 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
         }
 
         permissionStatus.onchange = () => {
-          console.log('[SAARTHI VOICE PERMISSION CHANGED] Status:', permissionStatus.state);
           if (permissionStatus.state === 'granted') {
             setHasMicPermission(true);
             hasMicPermissionRef.current = true;
             if (micStatus === 'denied') setMicStatus('idle');
-            if (voiceModeRef.current === 'off') startUnifiedSpeechEngine();
           } else if (permissionStatus.state === 'denied') {
             setHasMicPermission(false);
             hasMicPermissionRef.current = false;
@@ -191,67 +153,90 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
           }
         };
       }).catch(err => {
-        console.warn('[SAARTHI VOICE PERMISSION QUERY WARN]', err);
+        console.warn('[SAARTHI VOICE PERMISSION WARN]', err);
       });
     }
   }, []);
-
-  // Helper to compute unified text combining reportText and any live interimTranscript
-  const getCombinedReportText = (): string => {
-    const main = reportText || reportTextRef.current;
-    const interim = interimTranscript || interimTranscriptRef.current;
-    if (main && interim) {
-      if (main.toLowerCase().includes(interim.toLowerCase())) return main.trim();
-      return sanitizeReportText(main + ' ' + interim);
-    }
-    return sanitizeReportText(main || interim);
-  };
-
-  // Real-time automatic sanitizer watcher on reportText
-  useEffect(() => {
-    if (isRegexWakeMatch(reportText)) {
-      const cleaned = sanitizeReportText(reportText);
-      if (cleaned !== reportText) {
-        setReportText(cleaned);
-      }
-    }
-  }, [reportText]);
 
   const matchesWakeWord = (transcript: string): boolean => {
     const lower = transcript.toLowerCase();
     const customMatch = customPhrasesRef.current.some(phrase => lower.includes(phrase.toLowerCase()));
     const regexMatch = isRegexWakeMatch(lower);
     const fuzzyMatch = sensitivityRef.current === 'high' && isFuzzySaarthiMatch(lower);
-    
-    console.log('[SAARTHI VOICE EVAL]', {
-      transcript: lower,
-      customMatch,
-      regexMatch,
-      fuzzyMatch,
-      result: customMatch || regexMatch || fuzzyMatch
-    });
-
     return customMatch || regexMatch || fuzzyMatch;
   };
 
-  // Whisper Audio Transcription Call
-  const finishAndTranscribeWhisper = async () => {
+  // STOP SpeechRecognition completely and start MediaRecorder audio capture
+  const startRawAudioRecording = async () => {
+    console.log('[SAARTHI VOICE] Stopping SpeechRecognition and starting raw MediaRecorder...');
+    
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch (e) {}
+      recognitionRef.current = null;
+    }
+
+    if (!mediaStreamRef.current) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStreamRef.current = stream;
+        startAudioAnalysis(stream);
+        setHasMicPermission(true);
+        hasMicPermissionRef.current = true;
+      } catch (err) {
+        console.warn('[SAARTHI VOICE] Could not access microphone for audio recording:', err);
+        setMicStatus('denied');
+        return;
+      }
+    }
+
+    try {
+      audioChunksRef.current = [];
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : (MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4');
+
+      const recorder = new MediaRecorder(mediaStreamRef.current, { mimeType });
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      recorder.start(200);
+      mediaRecorderRef.current = recorder;
+
+      hasSpokenVoiceRef.current = false;
+      silenceStartTimeRef.current = null;
+
+      voiceModeRef.current = 'dictating';
+      setVoiceMode('dictating');
+      setMicStatus('listening');
+      console.log('[SAARTHI MEDIA RECORDER] Recording audio raw chunks via MediaRecorder...');
+    } catch (err) {
+      console.error('[SAARTHI MEDIA RECORDER] Failed to start MediaRecorder:', err);
+    }
+  };
+
+  // Stop MediaRecorder and POST audio blob to /reports/transcribe endpoint
+  const stopRecordingAndTranscribe = async () => {
+    console.log('[SAARTHI VOICE] Stopping recording and submitting to Whisper endpoint...');
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       try { mediaRecorderRef.current.stop(); } catch (e) {}
     }
 
-    await new Promise(r => setTimeout(r, 150));
+    await new Promise(r => setTimeout(r, 200));
 
     if (audioChunksRef.current.length > 0) {
       const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-      console.log(`[SAARTHI WHISPER CLIENT] Transcribing ${audioBlob.size} bytes audio blob via Whisper API...`);
+      console.log(`[SAARTHI WHISPER CLIENT] Uploading ${audioBlob.size} bytes audio blob to backend...`);
 
       const formData = new FormData();
-      formData.append('file', audioBlob, 'speech_dictation.webm');
+      formData.append('file', audioBlob, 'field_dictation.webm');
 
       try {
         setIsTranscribingWhisper(true);
-        const res = await fetch('http://localhost:8000/api/v1/transcribe', {
+        const res = await fetch('http://localhost:8000/api/v1/reports/transcribe', {
           method: 'POST',
           body: formData
         });
@@ -259,62 +244,60 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
         if (res.ok) {
           const data = await res.json();
           if (data.text && data.text.trim()) {
-            console.log('⚡ [SAARTHI WHISPER TRANSCRIPTION RESULT]:', data.text);
-            const cleanedWhisperText = sanitizeReportText(data.text);
-            setReportText(cleanedWhisperText);
-            setInterimTranscript('');
+            console.log('⚡ [WHISPER TRANSCRIPTION RESULT]:', data.text);
+            const cleanedText = sanitizeReportText(data.text);
+            setReportText(cleanedText);
             setIsTranscribingWhisper(false);
-            if (cleanedWhisperText && !isProcessingRef.current) {
-              onSubmitReport(cleanedWhisperText);
+            
+            if (cleanedText && !isProcessingRef.current) {
+              onSubmitReport(cleanedText);
+            }
+
+            if (hasMicPermissionRef.current) {
+              startWakeWordListener();
+            } else {
+              setVoiceMode('off');
             }
             return;
           }
+        } else {
+          console.warn('[SAARTHI WHISPER CLIENT] Server responded with error:', res.status);
         }
       } catch (err) {
-        console.warn('[SAARTHI WHISPER CLIENT] Whisper API unreachable (using WebSpeech fallback):', err);
+        console.error('[SAARTHI WHISPER CLIENT] Error calling transcription endpoint:', err);
       } finally {
         setIsTranscribingWhisper(false);
       }
     }
 
-    // Fallback: Submit current combined text if Whisper endpoint unavailable
-    const fallbackText = getCombinedReportText();
-    if (fallbackText) {
-      setReportText(fallbackText);
-      setInterimTranscript('');
-      if (!isProcessingRef.current) {
-        onSubmitReport(fallbackText);
-      }
+    if (hasMicPermissionRef.current) {
+      startWakeWordListener();
+    } else {
+      setVoiceMode('off');
     }
   };
 
-  // UNIFIED SINGLE-INSTANCE SPEECH RECOGNITION ENGINE
-  const startUnifiedSpeechEngine = async () => {
-    console.log('[SAARTHI VOICE] Initializing speech engine...');
-    consecutiveErrorsRef.current = 0;
-    lastErrorRef.current = '';
+  // Wake-Word Listener ONLY (SpeechRecognition handles trigger phrase detection only)
+  const startWakeWordListener = async () => {
+    console.log('[SAARTHI VOICE] Starting SpeechRecognition for Wake Word detection ("Hey Saarthi")...');
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      console.warn('[SAARTHI VOICE] SpeechRecognition API unsupported in this browser');
       setMicStatus('unsupported');
       return;
     }
 
     if (!mediaStreamRef.current) {
       try {
-        console.log('[SAARTHI VOICE] Requesting microphone permission...');
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaStreamRef.current = stream;
         startAudioAnalysis(stream);
-        hasMicPermissionRef.current = true;
         setHasMicPermission(true);
-        console.log('[SAARTHI VOICE] Microphone permission GRANTED');
+        hasMicPermissionRef.current = true;
       } catch (err) {
-        console.warn('[SAARTHI VOICE] Microphone permission DENIED:', err);
         setMicStatus('denied');
-        hasMicPermissionRef.current = false;
         setHasMicPermission(false);
+        hasMicPermissionRef.current = false;
         return;
       }
     }
@@ -329,109 +312,37 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
     recognition.lang = 'en-US';
 
     recognition.onresult = (event: any) => {
-      consecutiveErrorsRef.current = 0; // Reset error count on successful output
-      let currentInterim = '';
-
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const rawTranscript = event.results[i][0].transcript;
-        const isFinal = event.results[i].isFinal;
-        
-        console.log(`[SAARTHI VOICE onresult index ${i}]`, { rawTranscript, isFinal, mode: voiceModeRef.current });
-
-        // MODE A: WAKE WORD LISTENING
-        if (voiceModeRef.current === 'wake_listen') {
-          if (matchesWakeWord(rawTranscript)) {
-            console.log('⚡ WAKE WORD "HEY SAARTHI" DETECTED AT INDEX:', i);
-            
-            // Set wakeWordResultIndexRef to i (not i+1) so segment i is retained when final
-            wakeWordResultIndexRef.current = i;
-            voiceModeRef.current = 'dictating';
-            setVoiceMode('dictating');
-            setWakeWordDetected(true);
-            setMicStatus('listening');
-            
-            // Reset VAD Decibel Tracker
-            hasSpokenVoiceRef.current = false;
-            silenceStartTimeRef.current = null;
-
-            const cleanedAfterWake = sanitizeReportText(rawTranscript);
-            if (cleanedAfterWake) {
-              setReportText(cleanedAfterWake);
-            }
-
-            setTimeout(() => { setWakeWordDetected(false); }, 1500);
-            return;
-          }
-        } 
-        // MODE B: DICTATING REPORT
-        else if (voiceModeRef.current === 'dictating') {
-          if (i < wakeWordResultIndexRef.current) continue;
-
-          const cleanedText = sanitizeReportText(rawTranscript);
-
-          if (isFinal) {
-            if (cleanedText) {
-              setReportText(prev => {
-                const base = prev.trim();
-                if (base && base.toLowerCase().includes(cleanedText.toLowerCase())) return base;
-                const updated = base ? (base + ' ' + cleanedText) : cleanedText;
-                return sanitizeReportText(updated);
-              });
-            }
-          } else {
-            if (cleanedText) {
-              currentInterim += (currentInterim ? ' ' : '') + cleanedText;
-            }
-          }
+        if (voiceModeRef.current === 'wake_listen' && matchesWakeWord(rawTranscript)) {
+          console.log('⚡ WAKE WORD "HEY SAARTHI" DETECTED! SWITCHING TO MEDIA RECORDER...');
+          setWakeWordDetected(true);
+          setTimeout(() => setWakeWordDetected(false), 2000);
+          
+          startRawAudioRecording();
+          return;
         }
       }
-
-      setInterimTranscript(sanitizeReportText(currentInterim));
     };
 
     recognition.onerror = (event: any) => {
-      console.warn('[SAARTHI VOICE onerror] Engine error:', event.error);
-      lastErrorRef.current = event.error;
-      
+      console.warn('[SAARTHI WAKE ENGINE onerror]', event.error);
       if (event.error === 'not-allowed') {
         setMicStatus('denied');
-        hasMicPermissionRef.current = false;
         setHasMicPermission(false);
-      } else if (event.error === 'network' || event.error === 'audio-capture') {
-        consecutiveErrorsRef.current += 1;
-        console.warn(`[SAARTHI VOICE] ${event.error} error (count: ${consecutiveErrorsRef.current})`);
-      } else if (event.error === 'no-speech') {
-        console.log('[SAARTHI VOICE] Silence drop ("no-speech"). Recognition will restart in onend.');
+        hasMicPermissionRef.current = false;
       }
     };
 
     recognition.onend = () => {
-      console.log('[SAARTHI VOICE onend] Engine stopped. Mode:', voiceModeRef.current, 'MicPermission:', hasMicPermissionRef.current, 'Errors:', consecutiveErrorsRef.current);
-      
-      if (consecutiveErrorsRef.current >= 4) {
-        console.warn('[SAARTHI VOICE] Consecutive errors limit reached (4). Pausing auto-restart spin loop.');
-        setMicStatus('idle');
-        return;
-      }
-
-      if (voiceModeRef.current !== 'off' && hasMicPermissionRef.current) {
-        const delay = consecutiveErrorsRef.current > 0 ? 1500 : 250;
+      if (voiceModeRef.current === 'wake_listen' && hasMicPermissionRef.current) {
         setTimeout(() => {
           try {
-            if (recognitionRef.current && voiceModeRef.current !== 'off') {
-              try {
-                recognitionRef.current.start();
-                console.log('[SAARTHI VOICE] Recognition restarted cleanly');
-              } catch (startErr) {
-                // If start fails because instance is stale, re-initialize engine
-                console.warn('[SAARTHI VOICE] Instance restart failed, re-initializing engine...');
-                startUnifiedSpeechEngine();
-              }
+            if (recognitionRef.current && voiceModeRef.current === 'wake_listen') {
+              recognitionRef.current.start();
             }
-          } catch (e: any) {
-            console.warn('[SAARTHI VOICE] Error restarting recognition:', e?.message || e);
-          }
-        }, delay);
+          } catch (e) {}
+        }, 300);
       }
     };
 
@@ -442,25 +353,33 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
       voiceModeRef.current = 'wake_listen';
       setVoiceMode('wake_listen');
       setMicStatus('wake_listening');
-      console.log('[SAARTHI VOICE] Engine started in wake_listen mode');
     } catch (e) {
-      console.warn('[SAARTHI VOICE] Error starting speech engine:', e);
+      console.warn('[SAARTHI WAKE ENGINE] Error starting SpeechRecognition:', e);
     }
   };
 
   const disableMicrophone = () => {
     voiceModeRef.current = 'off';
     setVoiceMode('off');
-    if (recognitionRef.current) {
-      try { recognitionRef.current.stop(); } catch (e) {}
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop(); } catch (e) {}
     }
+    mediaRecorderRef.current = null;
+    audioChunksRef.current = [];
+
+    if (recognitionRef.current) {
+      try { recognitionRef.current.abort(); } catch (e) {}
+      recognitionRef.current = null;
+    }
+
     stopAudioAnalysis();
     setHasMicPermission(false);
+    hasMicPermissionRef.current = false;
     setMicStatus('idle');
-    setInterimTranscript('');
   };
 
-  // DECIBEL VOLUME & VOICE ACTIVITY DETECTION (VAD) ENGINE
+  // VAD Decibel Analysis Loop
   const startAudioAnalysis = (stream: MediaStream) => {
     try {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -475,7 +394,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
       const updateWaveform = () => {
         if (!audioCtx || audioCtx.state === 'closed') return;
         analyser.getByteFrequencyData(dataArray);
-        
+
         let sum = 0;
         const newWave: number[] = [];
         for (let i = 0; i < 9; i++) {
@@ -485,33 +404,22 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
         }
         setAudioWaveform(newWave);
 
-        // Calculate average RMS decibel volume % (0 to 100%)
         const avgVol = Math.round(((sum / (dataArray.length || 9)) / 255) * 100);
         setDecibelLevel(avgVol);
 
-        // DECIBEL SILENCE TEARDOWN VAD LOGIC
+        // Silence VAD Teardown
         if (voiceModeRef.current === 'dictating') {
           if (avgVol >= HUMAN_SPEECH_DECIBEL_THRESHOLD) {
-            // Human speech decibels detected!
             hasSpokenVoiceRef.current = true;
             silenceStartTimeRef.current = null;
           } else if (hasSpokenVoiceRef.current) {
-            // Decibel volume dropped below human speech level AFTER user started speaking
             if (!silenceStartTimeRef.current) {
               silenceStartTimeRef.current = Date.now();
             } else if (Date.now() - silenceStartTimeRef.current >= SILENCE_FINISH_DURATION_MS) {
-              console.log('⚡ DECIBEL SILENCE DROP DETECTED — TRANSCRIBING VIA WHISPER & AUTO-SUBMITTING!');
-              
+              console.log('⚡ DECIBEL SILENCE DROP DETECTED — STOPPING RECORDER & TRANSCRIBING...');
               silenceStartTimeRef.current = null;
               hasSpokenVoiceRef.current = false;
-
-              // 1. Transition mode back to wake_listen
-              voiceModeRef.current = 'wake_listen';
-              setVoiceMode('wake_listen');
-              setMicStatus('wake_listening');
-
-              // 2. Transcribe via Whisper & submit report automatically!
-              finishAndTranscribeWhisper();
+              stopRecordingAndTranscribe();
             }
           }
         }
@@ -563,11 +471,10 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
           if (updated.length >= 3) {
             const newPhrases = Array.from(new Set([...customPhrases, ...updated]));
             setCustomPhrases(newPhrases);
-            localStorage.setItem('setutrack_custom_wake_phrases', JSON.stringify(newPhrases));
+            localStorage.setItem('saarthi_custom_wake_phrases', JSON.stringify(newPhrases));
           }
           return updated;
         });
-
         setTrainerStep(prev => Math.min(3, prev + 1));
       }
     };
@@ -576,44 +483,25 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
     try { rec.start(); } catch (e) {}
   };
 
+  // Push-to-Talk & Manual Tap Trigger (Unified Action Handler)
   const handleManualMicToggle = async () => {
-    consecutiveErrorsRef.current = 0; // Reset error counters on manual user interaction
-    lastErrorRef.current = '';
-
     if (voiceMode === 'dictating') {
-      voiceModeRef.current = 'wake_listen';
-      setVoiceMode('wake_listen');
-      setMicStatus('wake_listening');
-
-      const textToSubmit = getCombinedReportText();
-      if (textToSubmit) {
-        setReportText(textToSubmit);
-        setInterimTranscript('');
-        if (!isProcessingRef.current) {
-          onSubmitReport(textToSubmit);
-        }
-      }
+      stopRecordingAndTranscribe();
       return;
     }
 
     if (!hasMicPermission) {
-      await startUnifiedSpeechEngine();
+      await startWakeWordListener();
     }
 
-    hasSpokenVoiceRef.current = false;
-    silenceStartTimeRef.current = null;
-    voiceModeRef.current = 'dictating';
-    setVoiceMode('dictating');
-    setMicStatus('listening');
+    startRawAudioRecording();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const textToSubmit = getCombinedReportText();
-    if (!textToSubmit || isProcessing) return;
-    setReportText(textToSubmit);
-    setInterimTranscript('');
-    onSubmitReport(textToSubmit);
+    if (!reportText.trim() || isProcessing) return;
+    const cleanText = sanitizeReportText(reportText);
+    onSubmitReport(cleanText);
   };
 
   return (
@@ -623,12 +511,12 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
       <section className="w-full bg-surface-container-low py-3 px-4 md:px-6 shadow-xs rounded-xl mb-6">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-secondary animate-pulse"></span>
             <span className="font-mono text-xs font-bold text-on-surface uppercase tracking-wider">SITE INTAKE // QUICK FIELD REPORT</span>
             <span className="font-mono text-xs text-outline">//</span>
             <span className="font-mono text-xs text-on-surface-variant flex items-center gap-1">
               <Radio className="w-3.5 h-3.5 text-secondary animate-pulse" />
-              VOICE ENGINE: {voiceMode === 'off' ? 'MIC OFF' : (voiceMode === 'wake_listen' ? 'LISTENING FOR "HEY SAARTHI"' : 'DICTATING REPORT')}
+              VOICE ENGINE: {voiceMode === 'off' ? 'MIC OFF' : (voiceMode === 'wake_listen' ? 'LISTENING FOR "HEY SAARTHI"' : 'RECORDING AUDIO (WHISPER STT)')}
             </span>
           </div>
 
@@ -636,7 +524,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
             <button
               type="button"
               onClick={async () => {
-                if (!hasMicPermission) await startUnifiedSpeechEngine();
+                if (!hasMicPermission) await startWakeWordListener();
                 setTrainerStep(1);
                 setTrainerTranscripts([]);
                 setIsTrainerOpen(true);
@@ -651,8 +539,8 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
             {!hasMicPermission ? (
               <button
                 type="button"
-                onClick={startUnifiedSpeechEngine}
-                className="px-4 py-1.5 rounded-full bg-amber-500 text-slate-950 hover:bg-amber-400 font-mono text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer animate-pulse shadow-sm"
+                onClick={startWakeWordListener}
+                className="px-4 py-1.5 rounded-full bg-amber-500 text-slate-950 font-mono text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm hover:bg-amber-400"
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span>ENABLE MIC ACCESS</span>
@@ -694,15 +582,15 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
           {wakeWordDetected && (
             <div className="w-full mb-6 p-3 bg-secondary-container border border-secondary text-on-secondary-container rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 animate-bounce shadow-md">
               <Volume2 className="w-4 h-4 text-secondary" />
-              <span>WAKE WORD "HEY SAARTHI" DETECTED! LISTENING FOR FIELD REPORT NOW...</span>
+              <span>WAKE WORD "HEY SAARTHI" DETECTED! RECORDING RAW AUDIO NOW...</span>
             </div>
           )}
 
           {/* Whisper Server Processing Banner */}
           {isTranscribingWhisper && (
-            <div className="w-full mb-6 p-3 bg-amber-100 border border-amber-400 text-amber-900 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 animate-pulse shadow-md">
-              <PulseIcon className="w-4 h-4 text-amber-700 animate-spin" />
-              <span>TRANSCRIBING AUDIO VIA OPENAI WHISPER MODEL...</span>
+            <div className="w-full mb-6 p-4 bg-amber-500 text-slate-950 border border-amber-600 rounded-xl text-xs font-mono font-extrabold flex items-center justify-center gap-3 shadow-lg animate-pulse">
+              <PulseIcon className="w-5 h-5 text-slate-950 animate-spin" />
+              <span>TRANSCRIBING AUDIO VIA OPENAI WHISPER MODEL... PLEASE WAIT</span>
             </div>
           )}
 
@@ -714,31 +602,31 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
             </div>
           )}
 
-          {/* Push-To-Talk Voice Hub */}
+          {/* TASK 2: Unified Voice Trigger Hub — Single Circular Mic Button (Supports both "Hey Saarthi" & direct Click/Tap) */}
           <div className="relative flex items-center justify-center my-4 select-none">
-            <div className={`absolute w-56 h-56 rounded-full bg-secondary-container/40 ${voiceMode === 'dictating' ? 'animate-ping opacity-70' : 'opacity-20'}`}></div>
-            <div className={`absolute w-48 h-48 rounded-full bg-secondary-container/50 ${voiceMode === 'dictating' ? 'animate-pulse opacity-90' : 'opacity-40'}`}></div>
+            <div className={`absolute w-52 h-52 rounded-full bg-secondary-container/40 transition-all duration-300 ${voiceMode === 'dictating' ? 'animate-ping opacity-70 scale-110' : 'opacity-20 scale-100'}`}></div>
+            <div className={`absolute w-44 h-44 rounded-full bg-secondary-container/50 transition-all duration-300 ${voiceMode === 'dictating' ? 'animate-pulse opacity-90 scale-105' : 'opacity-40 scale-100'}`}></div>
             
             <button
               type="button"
               onClick={handleManualMicToggle}
-              className={`relative group w-44 h-44 rounded-full flex flex-col items-center justify-center shadow-xl transition-all duration-200 focus:outline-none ring-4 ring-offset-4 ring-offset-surface cursor-pointer ${
+              className={`relative group w-44 h-44 rounded-full flex flex-col items-center justify-center shadow-xl transition-all duration-200 ease-in-out focus:outline-none ring-4 ring-offset-4 ring-offset-surface cursor-pointer ${
                 voiceMode === 'dictating'
-                  ? 'bg-amber-500 text-slate-950 ring-amber-400 animate-pulse'
-                  : 'bg-primary-container text-on-primary ring-secondary hover:scale-105'
+                  ? 'bg-amber-500 text-slate-950 ring-amber-400 animate-pulse scale-105'
+                  : 'bg-slate-900 text-white ring-secondary hover:scale-105 hover:bg-slate-800'
               }`}
             >
               {voiceMode === 'dictating' ? (
                 <>
-                  <MicOff className="w-14 h-14 text-slate-950 mb-1" />
-                  <span className="font-mono text-xs font-black tracking-widest uppercase">DICTATING...</span>
-                  <span className="font-mono text-[9px] text-slate-900 tracking-wider mt-0.5">CLICK TO FINISH & SYNC</span>
+                  <Square className="w-12 h-12 text-slate-950 mb-1 fill-slate-950" />
+                  <span className="font-mono text-xs font-black tracking-widest uppercase">RECORDING...</span>
+                  <span className="font-mono text-[9px] text-slate-900 tracking-wider mt-0.5">CLICK TO FINISH</span>
                 </>
               ) : (
                 <>
-                  <Mic className="w-14 h-14 text-on-primary group-hover:scale-110 transition-transform duration-200 mb-1" />
-                  <span className="font-mono text-xs font-black text-secondary-fixed tracking-widest uppercase">PUSH TO TALK</span>
-                  <span className="font-mono text-[9px] text-on-primary-container tracking-wider mt-0.5">OR SAY "HEY SAARTHI"</span>
+                  <Mic className="w-12 h-12 text-white group-hover:scale-110 transition-transform duration-200 mb-1" />
+                  <span className="font-mono text-xs font-black text-white tracking-widest uppercase">PUSH / TAP TO RECORD</span>
+                  <span className="font-mono text-[9px] text-slate-300 tracking-wider mt-0.5">SAY "HEY SAARTHI" OR TAP</span>
                 </>
               )}
             </button>
@@ -750,14 +638,14 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
               {voiceMode === 'dictating' ? (
                 <span className="text-amber-700 font-extrabold flex items-center gap-2">
                   <PulseIcon className="w-5 h-5 text-amber-600 animate-spin" />
-                  Dictating Field Report... Pause 1.4s to Auto-Submit
+                  Recording Audio... Speak now. Pause 1.4s or Tap Circle to Transcribe.
                 </span>
               ) : (
-                <>Tap button or Say <span className="text-secondary underline decoration-2 underline-offset-4">“Hey Saarthi”</span> to dictate</>
+                <>Say <span className="text-secondary underline decoration-2 underline-offset-4 font-extrabold">“Hey Saarthi”</span> or tap the Mic Circle to dictate</>
               )}
             </h2>
             <p className="text-xs md:text-sm text-on-surface-variant max-w-lg">
-              Calibrated for high acoustic background noise (pumps, rebar cutters, diesel excavators).
+              Audio is recorded directly via MediaRecorder and transcribed using local Whisper speech-to-text.
             </p>
           </div>
 
@@ -772,30 +660,24 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
             ))}
           </div>
 
-          {/* Decibel Volume Level Gauge when dictating */}
+          {/* Decibel Volume Gauge */}
           {voiceMode === 'dictating' && (
             <div className="mt-3 flex items-center gap-2 font-mono text-xs">
-              <span className="text-on-surface-variant text-[11px]">VOICE VOLUME DECIBEL:</span>
+              <span className="text-on-surface-variant text-[11px]">AUDIO VOLUME LEVEL:</span>
               <span className={`font-bold px-2 py-0.5 rounded border ${
                 decibelLevel >= HUMAN_SPEECH_DECIBEL_THRESHOLD
                   ? 'text-emerald-800 bg-emerald-100 border-emerald-300'
                   : 'text-amber-800 bg-amber-100 border-amber-300'
               }`}>
-                {decibelLevel}% {decibelLevel >= HUMAN_SPEECH_DECIBEL_THRESHOLD ? '(HUMAN VOICE)' : '(SILENCE PAUSE)'}
+                {decibelLevel}% {decibelLevel >= HUMAN_SPEECH_DECIBEL_THRESHOLD ? '(SPEAKING)' : '(SILENCE DETECTED)'}
               </span>
-            </div>
-          )}
-
-          {interimTranscript && (
-            <div className="mt-3 p-2 bg-surface-container-high border border-surface-container-highest rounded-lg max-w-lg text-xs font-mono text-secondary italic truncate">
-              "{interimTranscript}"
             </div>
           )}
 
           {/* Glove-Friendly Preset Dictation Chips */}
           <div className="w-full mt-6">
             <div className="font-mono text-[11px] font-bold text-outline uppercase tracking-wider mb-2">
-              TAP QUICK SAMPLE PROMPTS TO AUTO-FILL:
+              TAP SAMPLE FIELD PROMPTS TO DEMO:
             </div>
             <div className="flex flex-wrap items-center justify-center gap-2">
               {SAMPLE_REPORTS.map((sample, idx) => (
@@ -833,11 +715,11 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
           <div className="flex items-center gap-2 md:flex-col justify-end">
             <button
               type="submit"
-              disabled={(!reportText.trim() && !interimTranscript.trim()) || isProcessing}
-              className="h-14 px-6 bg-primary-container hover:bg-primary text-on-primary font-bold text-sm rounded-xl flex items-center justify-center gap-2 shrink-0 shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer w-full md:w-auto"
+              disabled={!reportText.trim() || isProcessing}
+              className="h-14 px-6 bg-slate-900 text-white hover:bg-slate-800 font-extrabold text-sm rounded-xl flex items-center justify-center gap-2 shrink-0 shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer w-full md:w-auto"
             >
-              <Send className="w-4 h-4 text-secondary-fixed" />
-              <span>{isProcessing ? 'ANALYZING...' : 'Process Report'}</span>
+              <Send className="w-4 h-4 text-emerald-400" />
+              <span className="text-white font-bold">{isProcessing ? 'PROCESSING...' : 'Process Report'}</span>
             </button>
           </div>
         </div>
@@ -845,7 +727,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
 
       {/* VOICE TRAINER MODAL */}
       {isTrainerOpen && (
-        <div className="fixed inset-0 z-50 bg-primary/80 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-surface-container-lowest max-w-md w-full p-6 rounded-2xl border border-surface-container-high text-xs font-mono space-y-4 shadow-2xl">
             <div className="flex justify-between items-center border-b border-surface-container-high pb-3">
               <h3 className="font-extrabold text-on-surface text-sm flex items-center gap-2">
@@ -871,7 +753,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
                 <button
                   type="button"
                   onClick={startTrainerStep}
-                  className="px-4 py-2 bg-primary-container text-on-primary rounded-xl cursor-pointer font-bold"
+                  className="px-4 py-2 bg-slate-900 text-white rounded-xl cursor-pointer font-bold hover:bg-slate-800"
                 >
                   Click to Speak Step {trainerStep}
                 </button>
@@ -896,7 +778,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
                   type="button"
                   onClick={() => {
                     setIsTrainerOpen(false);
-                    if (hasMicPermission) startUnifiedSpeechEngine();
+                    if (hasMicPermission) startWakeWordListener();
                   }}
                   className="w-full py-2.5 bg-secondary-container text-on-secondary-container font-bold rounded-xl cursor-pointer shadow-sm hover:bg-secondary-fixed transition-colors"
                 >

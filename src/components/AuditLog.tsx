@@ -88,13 +88,14 @@ export const AuditLog: React.FC<AuditLogProps> = ({
                 </td>
               </tr>
             ) : (
-              auditRecords.map(rec => {
+              auditRecords.map((rec, index) => {
                 const isExpanded = expandedId === rec.id;
                 return (
                   <React.Fragment key={rec.id}>
                     <tr
                       onClick={() => setExpandedId(isExpanded ? null : rec.id)}
-                      className="hover:bg-surface-container-low transition-colors cursor-pointer"
+                      style={{ animationDelay: `${Math.min(index * 30, 150)}ms` }}
+                      className="hover:bg-surface-container-low transition-colors cursor-pointer stagger-item"
                     >
                       <td className="py-3 px-3 text-on-surface-variant font-mono text-[11px] whitespace-nowrap">{rec.timestamp}</td>
                       <td className="py-3 px-3 max-w-xs truncate text-on-surface font-sans" title={rec.reportText}>

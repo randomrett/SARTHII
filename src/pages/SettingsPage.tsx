@@ -16,7 +16,7 @@ export const SettingsPage: React.FC = () => {
   } = useScheduleContext();
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto animate-in fade-in duration-200">
+    <div className="space-y-6 max-w-4xl mx-auto page-transition">
       
       {/* Header */}
       <div className="p-5 rounded-xl border border-outline/20 bg-surface-container-lowest shadow-sm">

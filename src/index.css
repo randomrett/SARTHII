@@ -2,10 +2,13 @@
 
 @theme {
   --color-primary: #000616;
+  --color-on-primary: #ffffff;
   --color-primary-container: #0f1f38;
+  --color-on-primary-container: #d6e3ff;
   --color-secondary: #006a61;
+  --color-on-secondary: #ffffff;
   --color-secondary-container: #86f2e4;
-  --color-on-secondary-container: #006f66;
+  --color-on-secondary-container: #004d46;
   --color-secondary-fixed: #89f5e7;
   --color-surface: #f8f9ff;
   --color-surface-container-lowest: #ffffff;
@@ -18,6 +21,7 @@
   --color-outline: #75777e;
   --color-outline-variant: #c5c6ce;
   --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
   --color-error-container: #ffdad6;
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Space Mono', monospace;
@@ -126,6 +130,38 @@
   animation: gridPulse 2.5s infinite ease-in-out;
 }
 
+/* Micro-animations and Transitions (<200ms duration for field utility feel) */
+@keyframes pageTransition {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes staggerFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-transition {
+  animation: pageTransition 150ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.stagger-item {
+  opacity: 0;
+  animation: staggerFadeIn 150ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
@@ -144,3 +180,4 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--cyan-accent);
 }
+

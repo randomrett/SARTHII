@@ -6,7 +6,9 @@
 
 ## 1. What this project is
 
-SAARTHI is an AI-powered Planning-to-Execution bridge designed to solve the critical infrastructure challenge of manual, delayed, and scattered site progress reporting (SIH Problem Statement ID SIH26122). Field updates from site supervisors are captured via hands-free voice dictation ("Hey Saarthi" wake word with decibel-based Voice Activity Detection) or structured text, normalized using construction domain phonetics, and matched against master schedule activities to update actual progress automatically. Currently, SAARTHI is built as a React 19 + TypeScript multi-page web application featuring client-side heuristic schedule matching, zero-touch autonomous auto-approval, an audit log, a schedule builder, and a companion FastAPI + PostgreSQL backend skeleton with JWT auth, CRUD endpoints, and a ported Python matching algorithm.
+SAARTHI is an AI-powered Planning-to-Execution bridge built to eliminate manual, delayed, and fragmented construction site progress reporting (SIH Problem Statement ID SIH26122). Field updates from site supervisors are captured via hands-free voice dictation ("Hey Saarthi" wake word with decibel-based Voice Activity Detection & physical mic teardown privacy control), structured text, site photo OCR & defect detection, site video keyframe analysis, or spreadsheet uploads (Excel/CSV ad-hoc reports and schedule baselines).
+
+Field jargon and spoken location terms are normalized using domain phonetics and matched against master schedule activities via a hybrid matching engine (SBERT sentence embeddings + token overlap + zone/date plausibility). High-confidence matches ($\ge 78\%$) are automatically zero-touch auto-approved to update baseline progress and record immutable audit trail entries. Low-confidence matches (&lt;78%) are routed to the **Human-in-the-Loop Review Queue** on the manager dashboard for manual approval, reassignment, or rejection. SAARTHI is resilient to field connectivity drops via an IndexedDB offline queueing engine with client-generated idempotency keys and automatic background sync flush.
 
 ---
 
@@ -18,17 +20,22 @@ SAARTHI is an AI-powered Planning-to-Execution bridge designed to solve the crit
 - **Language**: TypeScript (`typescript` `~6.0.2`)
 - **Routing**: React Router DOM (`react-router-dom` `^7.18.4`)
 - **Styling**: Tailwind CSS v4 (`tailwindcss` `^4.3.3`, `@tailwindcss/vite` `^4.3.3`, `tailwind-merge` `^3.6.0`, `clsx` `^2.1.1`)
-- **UI Components & Icons**: Lucide React (`lucide-react` `^1.41.0`), Canvas Confetti (`canvas-confetti` `^1.9.4`)
+- **UI Icons & FX**: Lucide React (`lucide-react` `^1.41.0`), Canvas Confetti (`canvas-confetti` `^1.9.4`)
+- **Offline Storage**: Browser IndexedDB API (`saarthi_offline_db`)
 - **Linter**: Oxlint (`oxlint` `^1.79.0`)
 
 ### Backend (`backend/requirements.txt`)
 - **Web Framework**: FastAPI (`fastapi` `>=0.109.0`)
-- **ASGI Server**: Uvicorn (`uvicorn[standard]` `>=0.27.0`)
-- **Voice Recognition**: OpenAI Whisper (`openai-whisper`, `torch`, `python-multipart`) for server-side audio transcription (`POST /api/v1/transcribe`)
-- **Database & ORM**: PostgreSQL (`psycopg2-binary` `>=2.9.9`), SQLAlchemy (`sqlalchemy` `>=2.0.25`), SQLite (local dev fallback)
+- **ASGI Server & Real-time WebSockets**: Uvicorn (`uvicorn[standard]` `>=0.27.0`), WebSockets (`/ws/updates`)
+- **Database & ORM**: SQLite (local dev) / PostgreSQL (`psycopg2-binary` `>=2.9.9`), SQLAlchemy (`sqlalchemy` `>=2.0.25`)
 - **Database Migrations**: Alembic (`alembic` `>=1.13.1`)
-- **Validation & Settings**: Pydantic v2 (`pydantic[email]` `>=2.6.0`, `email-validator` `>=2.1.0`, `pydantic-settings` `>=2.1.0`)
-- **Authentication & Security**: PyJWT / Python-Jose (`python-jose[cryptography]` `>=3.3.0`), Direct Bcrypt & Passlib (`passlib[bcrypt]` `>=1.7.4`)
+- **Validation & Settings**: Pydantic v2 (`pydantic[email]` `>=2.6.0`, `pydantic-settings` `>=2.1.0`)
+- **AI & NLP Services**:
+  - Google Gemini API (`google-genai` / `google-generativeai`) for photo OCR, defect analysis, video keyframes, & unstructured text extraction
+  - Sentence-Transformers / SBERT (`sentence-transformers/all-MiniLM-L6-v2`, `torch`) for vector embeddings
+  - OpenAI Whisper (`openai-whisper`, `python-multipart`) for local audio speech-to-text transcription
+- **Spreadsheet Parsers**: OpenPyXL (`openpyxl` `>=3.1.2`), Pandas (`pandas` `>=2.2.0`)
+- **Authentication & Security**: PyJWT (`python-jose[cryptography]`), Bcrypt (`bcrypt`)
 - **Containerization**: Docker & Docker Compose (`postgres:15-alpine`, Python 3.11-slim)
 
 ---
@@ -37,142 +44,112 @@ SAARTHI is an AI-powered Planning-to-Execution bridge designed to solve the crit
 
 ```
 SARTHII/
-├── CONTEXT.md                    # Single-file comprehensive context document (this file)
-├── Roadmap.md                    # Implementation roadmap and feature tracker
-├── package.json                  # Frontend dependencies and Vite scripts (name: "setutrack")
-├── vite.config.ts                # Vite build configuration with React & Tailwind plugins
+├── CONTEXT.md                    # Single-file comprehensive technical documentation (this file)
+├── Roadmap.md                    # Official SIH problem statement roadmap and feature tracker
+├── README.md                     # Quickstart, project summary, and run instructions
+├── package.json                  # Frontend dependencies and npm scripts (name: "saarthi")
+├── vite.config.ts                # Vite configuration with React & Tailwind plugins
 ├── index.html                    # Single-page app HTML entry point
+├── saarthi.db                    # Local dev SQLite database
 │
-├── src/                          # Frontend Source Code
+├── src/                          # Frontend Source Code (React 19 + TypeScript)
 │   ├── main.tsx                  # React DOM root entry point
 │   ├── App.tsx                   # Top-level router wrapper with ScheduleProvider & Navbar
-│   ├── index.css                 # Global blueprint aesthetic styles & custom scrollbars
+│   ├── index.css                 # Blueprint design aesthetic styles & scrollbar utilities
 │   ├── types/
-│   │   └── index.ts              # Domain model interfaces (Activity, MatchResult, AuditRecord)
+│   │   └── index.ts              # Domain interfaces (Activity, MatchResult, AuditRecord)
 │   ├── context/
-│   │   └── ScheduleContext.tsx   # React Context providing global schedule, match, and audit state
+│   │   └── ScheduleContext.tsx   # React Context providing persistent backend state, WebSocket sync, & review queue
 │   ├── components/
-│   │   ├── Navbar.tsx            # Persistent top navigation bar with active route highlighting
-│   │   ├── ReportIntake.tsx      # Voice intake ("Hey Saarthi"), decibel VAD, and text input
-│   │   ├── MatchingEngine.tsx    # Detailed candidate match breakdown & sub-score metrics
-│   │   ├── ScheduleBuilder.tsx   # CRUD activity list builder with schedule preset switcher
-│   │   ├── AuditLog.tsx          # Audit trail history table of auto-approved & modified reports
-│   │   └── BlueprintHeaderFooter.tsx # Blueprint engineering title block & stamp footer
+│   │   ├── Navbar.tsx            # Navigation bar with active route highlighting, pending badges, & live toasts
+│   │   ├── ReportIntake.tsx      # Split voice intake (SpeechRecognition wake-word + MediaRecorder Whisper STT + Tap to Record)
+│   │   ├── ReviewQueue.tsx       # Human-in-the-Loop review queue for low-confidence match approvals/reassignments
+│   │   ├── PlannedVsActual.tsx   # Planned-vs-actual progress comparison dashboard & slippage gap detection
+│   │   ├── MatchingEngine.tsx    # Candidate match breakdown & sub-score visualizers
+│   │   ├── ScheduleBuilder.tsx   # Activity CRUD list builder, Gantt timeline view, & spreadsheet importer
+│   │   ├── AuditLog.tsx          # Audit trail history table of auto-approved, corrected, & rejected reports
+│   │   └── ui/                   # Modular UI badges (ConfidenceBadge, ZoneTag, StatCard)
 │   ├── pages/
-│   │   ├── HomePage.tsx          # Route '/' — Field Intake & lightweight inline match summary
-│   │   ├── DashboardPage.tsx     # Route '/dashboard' — At-a-glance metrics & MatchingEngine
-│   │   ├── SchedulePage.tsx      # Route '/schedule' — Activity schedule builder
+│   │   ├── HomePage.tsx          # Route '/' — Field Intake, inline match confirmation, & offline queued card
+│   │   ├── DashboardPage.tsx     # Route '/dashboard' — Stat metrics, ReviewQueue, PlannedVsActual, & MatchingEngine
+│   │   ├── SchedulePage.tsx      # Route '/schedule' — Activity schedule builder with Gantt timeline
 │   │   ├── AuditPage.tsx         # Route '/audit' — Timestamped audit log table
 │   │   └── SettingsPage.tsx      # Route '/settings' — Zero-Touch toggle & AI config
 │   └── utils/
-│       ├── constructionPhonetics.ts # Domain spoken text normalization & jargon dictionary
-│       ├── matchingAlgorithm.ts # Client-side heuristic matching (semantic, zone, date scores)
+│       ├── api.ts                # Frontend HTTP client wrapper for FastAPI backend endpoints
+│       ├── offlineStore.ts       # IndexedDB offline report queue manager with idempotency keys
+│       ├── constructionPhonetics.ts # Spoken text normalization & construction jargon dictionary
+│       ├── matchingAlgorithm.ts # Client-side heuristic matching engine (fallback)
 │       └── presets.ts            # Baseline schedule presets (Metro, Highway, Tower)
 │
 └── backend/                      # FastAPI Python Backend Infrastructure
     ├── Dockerfile                # Python 3.11 container definition
     ├── docker-compose.yml        # Orchestrates API service + PostgreSQL container
     ├── requirements.txt          # Python dependencies
-    ├── alembic.ini & alembic/    # Database schema migration configuration
-    ├── test_backend.py           # Automated test suite validating all API endpoints
+    ├── test_tasks_1_to_4.py      # End-to-end automated test suite for ingestion & vision pipelines
+    ├── test_session_tasks.py     # Session integration test suite for audio transcription, review queue & WebSocket
     └── app/
-        ├── main.py               # FastAPI entrypoint, CORS configuration, & /health route
-        ├── config.py             # Pydantic BaseSettings (DB URL, JWT secret keys)
-        ├── database.py           # SQLAlchemy engine & session factory (Postgres/SQLite)
-        ├── security.py           # Password hashing (bcrypt) & JWT token utilities
+        ├── main.py               # FastAPI entrypoint, CORS configuration, & static uploads mount
+        ├── config.py             # Pydantic Settings (DB URL, Gemini API key, JWT keys)
+        ├── database.py           # SQLAlchemy engine & session factory
+        ├── security.py           # Password hashing, JWT token creation, & project authorization
         ├── models/               # SQLAlchemy DB models (User, Project, Activity, Report, AuditRecord)
         ├── schemas/              # Pydantic request/response schemas
-        ├── routers/              # API Endpoints (/auth, /projects, /activities, /reports, /match, /audit)
-        └── utils/
-            ├── phonetics.py      # Python port of spoken text normalizer
-            └── matching.py       # Python port of heuristic matching engine
+        ├── routers/              # API Endpoints (/auth, /projects, /activities, /reports, /match, /audit, /transcribe, /ingest, /ws)
+        ├── services/             # Semantic matcher (SBERT) & heuristic match wrappers
+        └── utils/                # Vision analysis (Gemini), document parser, excel parser, & phonetics
 ```
 
 ---
 
 ## 4. How the app actually works right now
 
-### User Flow
-1. **Report Intake (`/`)**:
-   - The user opens the home page and can type a field report or enable the microphone.
-   - Saying **"Hey Saarthi"** out loud (or manually toggling dictation) transitions `ReportIntake` from `wake_listen` to `dictating` mode.
-   - As the user speaks, browser Web Speech API transcribes audio into interim text, which is continuously sanitized using `constructionPhonetics.ts` (e.g. converting "jon a" to "Zone A", "eighty five percent" to "85%").
-   - A real-time AudioContext decibel analyzer tracks RMS voice volume. When speech drops below 12% decibels for >1.4 seconds, the VAD automatically submits the report.
-2. **Matching Engine & Evaluation**:
-   - `matchReportToSchedule()` evaluates the sanitized text against all active activities.
-   - It calculates four weighted sub-scores:
-     - **Semantic Match (50%)**: Word token overlap + domain synonym dictionary + Levenshtein distance.
-     - **Location Match (35%)**: Extracted zone keyword vs activity zone.
-     - **Date Plausibility (15%)**: Active vs completed activity status plausibility.
-     - **Progress Confidence**: Extracted explicit `%` or keyword completion level.
-3. **Zero-Touch Autonomous Execution**:
-   - If `autoApproveMode` is ON (default), top matches with confidence $\ge 50\%$ automatically update the baseline activity's progress and status (`not_started` $\rightarrow$ `in_progress` $\rightarrow$ `completed`) in `ScheduleContext`.
-   - An entry is logged automatically in `auditRecords`, a celebration confetti animation triggers, and an inline summary banner appears on the Home page (`Matched to Raft Foundation — Zone A (85% confidence)`).
-4. **Multi-Page Navigation**:
-   - **`/` (Home)**: Focuses strictly on report intake and lightweight confirmation.
-   - **`/dashboard`**: Displays progress metric cards and the full `MatchingEngine` candidate breakdown & sub-score bars.
-   - **`/schedule`**: Allows adding, editing, and deleting schedule line items.
-   - **`/audit`**: Displays immutable timestamped log of all report actions.
-   - **`/settings`**: Houses Zero-Touch mode toggle, Gemini API toggle, key input, and preset baseline selector.
+### End-to-End User Flow
+1. **Reworked Split Voice Capture & Manual Fallback (`/`)**:
+   - The user opens the home page and can dictate a report or click **"Tap to Record"**.
+   - SpeechRecognition runs ONLY to detect the wake phrase **"Hey Saarthi"**.
+   - As soon as the wake word is detected (or when "Tap to Record" is clicked), SpeechRecognition stops completely, and the browser's **MediaRecorder API** records raw audio chunks.
+   - When recording ends (via decibel VAD 1.4s silence or clicking "Done Recording"), the audio blob is uploaded to backend `POST /api/v1/reports/transcribe`.
+   - The backend runs local OpenAI Whisper model transcription and returns text, which feeds into the standard report matching pipeline (`onSubmitReport`).
 
-### Real vs. Stubbed Features (Ground Truth)
-- **REAL & WORKING**: Browser speech recognition wake-word dictation, decibel VAD auto-submit, client-side heuristic matching engine, zero-touch auto-approval, React Context state management, React Router multi-page navigation, FastAPI backend endpoints & automated test suite.
-- **STUBBED / UNWIRED**:
-  - **Live Gemini API**: Toggle and password input exist in `/settings`, but `matchingAlgorithm.ts` currently executes pure client-side heuristic matching without making LLM network calls.
-  - **Photo/Document Attachment**: The file input button on `/` captures the filename in component state, but photo OCR (Tesseract) / computer vision (YOLO) extraction is not yet wired up.
-  - **Frontend-Backend Sync**: The FastAPI backend is scaffolded, tested, and fully functional, but the frontend React app currently reads/writes state in `ScheduleContext.tsx` rather than fetching from the backend endpoints over HTTP.
+2. **Human-in-the-Loop Review Queue (`/dashboard`)**:
+   - Reports matching with confidence score &lt; 78% (or when Zero-Touch auto-approve mode is OFF) are routed into the **Pending Review Queue**.
+   - Managers review raw report text, timestamp, and candidate match scores.
+   - Manager actions: **Approve Match**, **Reassign & Approve** (choose different target activity & adjust progress %), or **Reject Report**.
+   - Endpoints `POST /api/v1/audit/{id}/approve` and `POST /api/v1/audit/{id}/reject` update the AuditRecord status (`manually_approved`, `corrected`, `rejected`), sync baseline activity progress, and broadcast WebSocket updates.
+
+3. **Planned vs. Actual Progress & Slippage Highlighting**:
+   - Calculates target progress-by-now for every activity based on `plannedStart`, `plannedEnd`, and today's date.
+   - Visual comparison bars display Planned Progress vs Actual Progress.
+   - Activities falling &gt;5% behind schedule or marked `delayed` are highlighted with red/amber accent badges and trigger live toast notifications.
+
+4. **Live WebSocket Push Synchronization**:
+   - Backend exposes `@app.websocket("/ws/updates")`.
+   - All connected browser dashboards automatically receive instant push events when reports are submitted, approved, or modified, eliminating manual page refreshes.
+
+5. **Mic Teardown Privacy Security**:
+   - Toggling microphone OFF in `ReportIntake.tsx` explicitly aborts `SpeechRecognition`, stops all `MediaStreamTrack` audio tracks (`track.stop()`), closes `AudioContext`, and terminates any `MediaRecorder` instance.
 
 ---
 
-## 5. Key architectural decisions and why
+## 5. How to run it locally
 
-1. **React Context (`ScheduleContext`) over Redux/Zustand**:
-   - Kept state lightweight and dependency-free. React Context effectively provides global state across all routed pages without extra boilerplate or third-party state manager overhead.
-2. **Client-Side First Heuristic Matching Engine**:
-   - Designed for zero-latency execution and offline site capability. Field supervisors often work in low-connectivity construction zones; local execution ensures the app functions without cloud server dependence.
-3. **Direct `bcrypt` in Python Security**:
-   - Replaced legacy `passlib` bcrypt wrapper in `backend/app/security.py` with direct `bcrypt` module calls to eliminate Python 3.11+ version incompatibility bugs while maintaining standard password hashing security.
-4. **Stateless RegExp Matcher (`isRegexWakeMatch`)**:
-   - Avoided stateful JavaScript `RegExp.prototype.test()` bugs caused by global `/g` flag `lastIndex` mutation, ensuring reliable wake-word detection across continuous speech calls.
-5. **Decibel RMS Voice Activity Detection (VAD)**:
-   - Used Web Audio API `AnalyserNode` frequency spectrum sampling rather than relying solely on browser speech recognition end events, enabling hands-free auto-submission when volume drops below human speech thresholds.
-
----
-
-## 6. Known issues / things mid-fix
-
-1. **Web Speech API Cloud Dependency & Network Drops**:
-   - Chrome's `webkitSpeechRecognition` relies on Google cloud speech servers. If internet drops or Chrome rate-limits recognition, Web Speech API fires `event.error === 'network'`.
-   - *Status*: Mitigated by adding `consecutiveErrorsRef` with 1500ms backoff and auto-restart cap (4 errors max) in `ReportIntake.tsx` alongside manual activation buttons, but offline speech requires future local Whisper integration.
-2. **Frontend Persistence**:
-   - `ScheduleContext` state resets on browser page refresh (except custom trained wake phrases stored in `localStorage`). Connecting `ScheduleContext` to the scaffolded FastAPI backend endpoints will provide persistent database storage.
-3. **Frontend Package Name**:
-   - `package.json` package name is still `"setutrack"`. Rebranding to `"saarthi"` is queued as part of overall branding polish.
-
----
-
-## 7. How to run it locally
-
-### 1. Frontend Web App (React + Vite)
+### 1. Frontend Web App (React 19 + Vite)
 ```bash
-# Install dependencies (if not already installed)
+# Install dependencies
 npm install
 
 # Start Vite development server
-npx vite
+npm run dev
 ```
 App runs at: **`http://localhost:5173`**
 
 ### 2. Backend API Server (FastAPI + Python)
-
-#### Method A: Direct Python (SQLite local dev)
 ```bash
 cd backend
 
-# Create virtual environment
+# Create & activate virtual environment (Windows PowerShell)
 python -m venv venv
-
-# Activate venv (Windows PowerShell)
 .\venv\Scripts\activate
 
 # Install requirements
@@ -183,19 +160,11 @@ uvicorn app.main:app --reload --port 8000
 ```
 API runs at: **`http://localhost:8000`** (Swagger docs: `http://localhost:8000/docs`)
 
-#### Method B: Docker Compose (FastAPI + PostgreSQL)
+### 3. Automated Backend Test Suites
 ```bash
-cd backend
-docker compose up --build
+# Session integration tests for audio STT, review queue & WebSockets
+.\backend\venv\Scripts\python.exe backend/test_session_tasks.py
+
+# Vision & document ingestion pipeline tests
+.\backend\venv\Scripts\python.exe backend/test_tasks_1_to_4.py
 ```
-
----
-
-## 8. Roadmap / not yet started
-
-See [Roadmap.md](file:///c:/Users/umang/OneDrive/Documents/GitHub/SARTHII/Roadmap.md) for full project tracking.
-
-### Top 3 Priorities Next:
-1. **Frontend-to-Backend HTTP Integration**: Point `ScheduleContext.tsx` to the FastAPI backend API endpoints (`/projects`, `/activities`, `/reports`, `/match`, `/audit`) for persistent storage and auth login.
-2. **Data Capture Ingestion (OCR Integration)**: Integrate Tesseract OCR for site photo/receipt scanning to complement the OpenAI Whisper voice transcription engine.
-3. **AI/NLP Upgrade (SBERT / Sentence-Transformers)**: Replace keyword token overlap in `backend/app/utils/matching.py` with vector embeddings (`sentence-transformers/all-MiniLM-L6-v2`) for deep semantic matching.

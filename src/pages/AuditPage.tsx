@@ -6,7 +6,7 @@ export const AuditPage: React.FC = () => {
   const { auditRecords, handleClearAudit } = useScheduleContext();
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-200">
+    <div className="space-y-6 page-transition">
       <AuditLog
         auditRecords={auditRecords}
         onClearAudit={handleClearAudit}

@@ -14,6 +14,7 @@ class Report(Base):
     file_path = Column(String, nullable=True)
     file_type = Column(String, nullable=True) # text, document, excel, image, video
     media_url = Column(String, nullable=True)
+    idempotency_key = Column(String, unique=True, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     project = relationship("Project", back_populates="reports")

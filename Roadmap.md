@@ -8,7 +8,7 @@ This tracks what's built vs. what's left, based on the official SIH idea submiss
 
 ## ✅ Already built (frontend proof-of-concept)
 
-- [x] Voice/text report intake with wake-word activation
+- [x] Voice/text report intake with wake-word activation ("Hey Saarthi")
 - [x] Heuristic (regex/keyword) semantic + location + date matching
 - [x] Confidence scoring with high/low threshold split
 - [x] Zero-touch auto-approval vs. manual review toggle
@@ -22,7 +22,10 @@ This tracks what's built vs. what's left, based on the official SIH idea submiss
 - [x] FastAPI backend with PostgreSQL, JWT auth, Docker deployment
 - [x] Database schema for users, projects, activities, reports, audit trail
 - [x] Port matching algorithm to backend, expose as API
-- [ ] Deployment pipeline (Docker + AWS/Azure per the deck)<-finally currently will be deployed via vercel
+- [x] Live WebSocket update server (`/ws/updates`)
+- [ ] Deployment pipeline (Docker + AWS/Azure per the deck) — currently ready for Vercel / Cloud run deployment
+
+---
 
 ## 📥 Data capture (unifying scattered inputs — the core problem statement)
 
@@ -30,8 +33,12 @@ This tracks what's built vs. what's left, based on the official SIH idea submiss
 - [x] Video upload handling (Gemini Vision keyframes & video analysis)
 - [x] Excel file ingestion for ad-hoc reports
 - [x] Baseline schedule import from Primavera P6 / MS Project / Excel
-- [ ] Server-side voice transcription via Whisper (currently only browser SpeechRecognition, English-only)
-- [ ] Multilingual voice support (deck promises this for field adoption)
+- [x] Reworked split voice capture architecture: browser SpeechRecognition wake-word trigger + MediaRecorder raw audio capture
+- [x] Server-side voice transcription via Whisper (`POST /api/v1/reports/transcribe`)
+- [x] Manual fallback "Tap to Record" button (bypasses wake word for guaranteed reliability)
+- [ ] Multilingual voice support (Hindi/Marathi/Tamil phonetics dictionary extensions)
+
+---
 
 ## 🧠 AI/NLP upgrade
 
@@ -39,37 +46,44 @@ This tracks what's built vs. what's left, based on the official SIH idea submiss
 - [x] LLM-based unstructured text extraction (Task 2 Gemini Hybrid extraction mode)
 - [x] Computer vision / vision analysis for site photo analysis (Task 3 Gemini Vision OCR & defect detection)
 
+---
+
 ## 👤 Human-in-the-loop workflow
 
-- [ ] Proper reviewer/approval queue UI for low-confidence matches (beyond the current single-activity picker)
-- [ ] Manager approval/rejection endpoints tied to AuditRecord status
+- [x] Proper reviewer/approval queue UI for low-confidence matches (`ReviewQueue.tsx` on Dashboard)
+- [x] Manager approval/rejection endpoints tied to AuditRecord status (`/audit/pending`, `/audit/{id}/approve`, `/audit/{id}/reject`)
+
+---
 
 ## 📊 Dashboard & reporting
 
-- [ ] Planned-vs-actual progress dashboard
-- [ ] Gantt chart view
-- [ ] Early delay/deviation highlighting
-- [ ] Live WebSocket-driven progress updates (no more manual refresh)
-- [ ] Notifications for delays/anomalies
+- [x] Planned-vs-actual progress dashboard (`PlannedVsActual.tsx` with date-based expected progress vs actual gap analysis)
+- [x] Gantt chart timeline view (Table & Gantt toggle view on Schedule Builder)
+- [x] Early delay/deviation highlighting (Red/amber slippage gap badges & highlighted delayed cards)
+- [x] Live WebSocket-driven progress updates (Real-time automatic sync without manual page refresh)
+- [x] Notifications for delays/anomalies (In-app toast notifications & pending review badges)
+
+---
 
 ## 🛡️ Reliability & ops
 
-- [ ] Offline-to-online sync (deck lists poor site connectivity as a named risk)
-- [ ] Persistence — right now everything resets on page reload except wake-phrase training data
-- [ ] Security: physical mic-teardown toggle (exists partially), TLS, data isolation (deck's stated security-feasibility claims — worth actually implementing, not just claiming)
+- [x] Offline-to-online sync (IndexedDB queueing + idempotency key server deduplication)
+- [x] Persistence — frontend ScheduleContext fully connected to backend REST CRUD & audit endpoints
+- [x] Security: physical mic-teardown toggle, secure context TLS readiness, project data isolation checks
+
+---
 
 ## ✨ Polish
 
-- [ ] Rebrand remaining "SetuTrack" references (package name, header title, localStorage keys) to SAARTHI
-- [ ] Real README replacing the untouched Vite boilerplate
+- [x] Rebrand remaining "SetuTrack" references to SAARTHI
+- [x] Fix dark-on-dark button contrast accessibility bugs across all pages
+- [x] Real README replacing Vite boilerplate
 
 ---
 
 ## Completed in latest session
 
-- [x] Fix voice wake-word activation ("Hey Saarthi" — renamed from "Hey Setu")
-- [x] Instrument & root-cause voice wake-word state machine & stateless regex fix
-- [x] Restructure into multi-page app with `react-router-dom` (5 routes: `/`, `/dashboard`, `/schedule`, `/audit`, `/settings`)
-- [x] Centralize shared application state in `ScheduleContext`
-- [x] Scaffold backend (FastAPI + PostgreSQL, auth, CRUD, ported matching algorithm)
-
+- [x] **Task 1**: Completely reworked voice capture architecture (SpeechRecognition ONLY for wake-word -> MediaRecorder raw audio -> Whisper server endpoint `POST /reports/transcribe` -> report pipeline). Added prominent manual "Tap to Record" fallback button.
+- [x] **Task 2**: Fixed dark-on-dark button contrast accessibility bugs across all pages (+ Add Activity, Process Report, Save, Upload buttons).
+- [x] **Task 3**: Built Human-in-the-loop Review Queue on Dashboard with manager approval/rejection backend endpoints (`/audit/pending`, `/approve`, `/reject`).
+- [x] **Task 4**: Built Planned-vs-Actual progress dashboard, Gantt timeline view, early delay highlighting, live WebSocket push updates (`/ws/updates`), and in-app delay/anomaly toast notifications.

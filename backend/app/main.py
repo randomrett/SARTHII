@@ -92,7 +92,8 @@ from app.routers import (
     match_router,
     audit_router,
     transcribe_router,
-    ingest_router
+    ingest_router,
+    websocket_router
 )
 
 app.include_router(auth_router, prefix=settings.API_V1_STR)
@@ -103,3 +104,5 @@ app.include_router(match_router, prefix=settings.API_V1_STR)
 app.include_router(audit_router, prefix=settings.API_V1_STR)
 app.include_router(transcribe_router, prefix=settings.API_V1_STR)
 app.include_router(ingest_router, prefix=settings.API_V1_STR)
+app.include_router(websocket_router)
+app.include_router(websocket_router, prefix=settings.API_V1_STR)

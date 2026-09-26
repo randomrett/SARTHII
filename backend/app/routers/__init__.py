@@ -6,6 +6,7 @@ from app.routers.match import router as match_router
 from app.routers.audit import router as audit_router
 from app.routers.transcribe import router as transcribe_router
 from app.routers.ingest import router as ingest_router
+from app.routers.websocket import router as websocket_router
 
 __all__ = [
     "auth_router",
@@ -15,5 +16,6 @@ __all__ = [
     "match_router",
     "audit_router",
     "transcribe_router",
-    "ingest_router"
+    "ingest_router",
+    "websocket_router"
 ]

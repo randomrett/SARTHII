@@ -3,6 +3,7 @@ from typing import Optional, Dict, Any
 from app.schemas.match import SubScoresSchema
 
 class AuditRecordCreate(BaseModel):
+    id: Optional[str] = None
     report_id: Optional[str] = None
     reportText: str
     matchedActivityId: str
@@ -12,7 +13,7 @@ class AuditRecordCreate(BaseModel):
     newProgress: float
     confidenceScore: float
     subScores: Optional[Dict[str, Any]] = None
-    status: str # auto_approved, manually_approved, corrected, rejected
+    status: str # auto_approved, manually_approved, corrected, rejected, pending_review
     notes: Optional[str] = None
     timestamp: str
 
