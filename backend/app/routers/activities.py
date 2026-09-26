@@ -4,8 +4,17 @@ from typing import List, Optional
 from app.database import get_db
 from app.models.activity import Activity
 from app.schemas.activity import ActivityCreate, ActivityUpdate, ActivityOut
+from app.services.matching import refresh_schedule
 
 router = APIRouter(tags=["Activities"])
+
+def _refresh_cache(db: Session):
+    try:
+        all_acts = db.query(Activity).all()
+        acts_data = [{"id": a.id, "name": a.name, "zone": a.zone, "category": a.category, "status": a.status, "progress": a.progress} for a in all_acts]
+        refresh_schedule(acts_data)
+    except Exception:
+        pass
 
 @router.get("/activities", response_model=List[ActivityOut])
 def list_all_activities(db: Session = Depends(get_db)):
@@ -33,6 +42,7 @@ def create_activity(act_in: ActivityCreate, db: Session = Depends(get_db)):
     db.add(activity)
     db.commit()
     db.refresh(activity)
+    _refresh_cache(db)
     return activity
 
 @router.put("/activities/{activity_id}", response_model=ActivityOut)
@@ -47,6 +57,7 @@ def update_activity(activity_id: str, act_in: ActivityUpdate, db: Session = Depe
 
     db.commit()
     db.refresh(activity)
+    _refresh_cache(db)
     return activity
 
 @router.delete("/activities/{activity_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -56,4 +67,5 @@ def delete_activity(activity_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Activity not found")
     db.delete(activity)
     db.commit()
+    _refresh_cache(db)
     return None

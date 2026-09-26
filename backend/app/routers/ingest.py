@@ -14,7 +14,7 @@ from app.models.activity import Activity
 from app.models.audit import AuditRecord
 from app.schemas.ingest import IngestionResultSchema
 from app.schemas.activity import ActivityOut
-from app.utils.matching import match_report_to_schedule
+from app.services.matching import match_report, refresh_schedule
 from app.utils.document_parser import parse_document_file
 from app.utils.excel_parser import parse_report_spreadsheet, parse_schedule_spreadsheet
 from app.utils.gemini import (
@@ -49,7 +49,8 @@ def _process_text_and_audit(
     token_usage: Optional[dict],
     db: Session,
     force_pending_review: bool = False,
-    override_notes: Optional[str] = None
+    override_notes: Optional[str] = None,
+    extracted_fields: Optional[dict] = None
 ) -> IngestionResultSchema:
     # 1. Save Report Record
     report = Report(
@@ -101,8 +102,8 @@ def _process_text_and_audit(
         for a in db_activities
     ]
 
-    # 3. Match report to schedule
-    match_results = match_report_to_schedule(raw_text, activities_data)
+    # 3. Match report to schedule via SBERT/Hybrid matcher
+    match_results = match_report(raw_text, activities_data, extracted_fields=extracted_fields)
 
     if not match_results:
         return IngestionResultSchema(
@@ -326,6 +327,11 @@ async def import_schedule_spreadsheet(
     for a in created_activities:
         db.refresh(a)
 
+    # Refresh Semantic Matcher schedule cache
+    all_acts = db.query(Activity).all()
+    acts_data = [{"id": a.id, "name": a.name, "zone": a.zone, "category": a.category, "status": a.status, "progress": a.progress} for a in all_acts]
+    refresh_schedule(acts_data)
+
     return {
         "filename": filename,
         "mode": mode,
@@ -403,6 +409,7 @@ async def upload_report_image(
         )
 
     extracted_text = gemini_res["full_report_text"]
+    structured_data = gemini_res.get("structured_data")
     token_usage = gemini_res.get("token_usage")
 
     return _process_text_and_audit(
@@ -413,7 +420,8 @@ async def upload_report_image(
         file_path=str(saved_path),
         media_url=media_url,
         token_usage=token_usage,
-        db=db
+        db=db,
+        extracted_fields=structured_data
     )
 
 

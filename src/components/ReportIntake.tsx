@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Mic, MicOff, Sparkles, FileText, Activity as PulseIcon, AlertCircle, Radio, Volume2, ShieldCheck, ShieldAlert, Sliders, CheckCircle2 } from 'lucide-react';
+import { Send, Mic, MicOff, Sparkles, Activity as PulseIcon, AlertCircle, Radio, Volume2, ShieldCheck, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { normalizeSpokenReport } from '../utils/constructionPhonetics';
+
 
 interface ReportIntakeProps {
   onSubmitReport: (reportText: string) => void;
@@ -119,6 +120,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
   const trainerRecognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const interimTranscriptRef = useRef('');
 
   useEffect(() => { 
     console.log('[SAARTHI VOICE STATE] Voice mode changed:', voiceModeRef.current, '->', voiceMode);
@@ -149,9 +151,61 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
 
   useEffect(() => { hasMicPermissionRef.current = hasMicPermission; }, [hasMicPermission]);
   useEffect(() => { reportTextRef.current = reportText; }, [reportText]);
+  useEffect(() => { interimTranscriptRef.current = interimTranscript; }, [interimTranscript]);
   useEffect(() => { customPhrasesRef.current = customPhrases; }, [customPhrases]);
   useEffect(() => { sensitivityRef.current = sensitivity; }, [sensitivity]);
   useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
+
+  // Initial Diagnostic Permission Check
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    console.log('[SAARTHI VOICE DIAGNOSTIC] SpeechRecognition available:', !!SpeechRecognition, typeof SpeechRecognition);
+
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'microphone' as any }).then((permissionStatus) => {
+        console.log('[SAARTHI VOICE PERMISSION DIAGNOSTIC] Status:', permissionStatus.state);
+        if (permissionStatus.state === 'granted') {
+          setHasMicPermission(true);
+          hasMicPermissionRef.current = true;
+          // Auto-start listening if mic permission was already granted
+          if (voiceModeRef.current === 'off') {
+            startUnifiedSpeechEngine();
+          }
+        } else if (permissionStatus.state === 'denied') {
+          setHasMicPermission(false);
+          hasMicPermissionRef.current = false;
+          setMicStatus('denied');
+        }
+
+        permissionStatus.onchange = () => {
+          console.log('[SAARTHI VOICE PERMISSION CHANGED] Status:', permissionStatus.state);
+          if (permissionStatus.state === 'granted') {
+            setHasMicPermission(true);
+            hasMicPermissionRef.current = true;
+            if (micStatus === 'denied') setMicStatus('idle');
+            if (voiceModeRef.current === 'off') startUnifiedSpeechEngine();
+          } else if (permissionStatus.state === 'denied') {
+            setHasMicPermission(false);
+            hasMicPermissionRef.current = false;
+            setMicStatus('denied');
+          }
+        };
+      }).catch(err => {
+        console.warn('[SAARTHI VOICE PERMISSION QUERY WARN]', err);
+      });
+    }
+  }, []);
+
+  // Helper to compute unified text combining reportText and any live interimTranscript
+  const getCombinedReportText = (): string => {
+    const main = reportText || reportTextRef.current;
+    const interim = interimTranscript || interimTranscriptRef.current;
+    if (main && interim) {
+      if (main.toLowerCase().includes(interim.toLowerCase())) return main.trim();
+      return sanitizeReportText(main + ' ' + interim);
+    }
+    return sanitizeReportText(main || interim);
+  };
 
   // Real-time automatic sanitizer watcher on reportText
   useEffect(() => {
@@ -208,6 +262,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
             console.log('⚡ [SAARTHI WHISPER TRANSCRIPTION RESULT]:', data.text);
             const cleanedWhisperText = sanitizeReportText(data.text);
             setReportText(cleanedWhisperText);
+            setInterimTranscript('');
             setIsTranscribingWhisper(false);
             if (cleanedWhisperText && !isProcessingRef.current) {
               onSubmitReport(cleanedWhisperText);
@@ -222,10 +277,14 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
       }
     }
 
-    // Fallback: Submit current text if Whisper endpoint unavailable
-    const fallbackText = sanitizeReportText(reportTextRef.current);
-    if (fallbackText && !isProcessingRef.current) {
-      onSubmitReport(fallbackText);
+    // Fallback: Submit current combined text if Whisper endpoint unavailable
+    const fallbackText = getCombinedReportText();
+    if (fallbackText) {
+      setReportText(fallbackText);
+      setInterimTranscript('');
+      if (!isProcessingRef.current) {
+        onSubmitReport(fallbackText);
+      }
     }
   };
 
@@ -284,7 +343,8 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
           if (matchesWakeWord(rawTranscript)) {
             console.log('⚡ WAKE WORD "HEY SAARTHI" DETECTED AT INDEX:', i);
             
-            wakeWordResultIndexRef.current = i + 1;
+            // Set wakeWordResultIndexRef to i (not i+1) so segment i is retained when final
+            wakeWordResultIndexRef.current = i;
             voiceModeRef.current = 'dictating';
             setVoiceMode('dictating');
             setWakeWordDetected(true);
@@ -311,9 +371,12 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
 
           if (isFinal) {
             if (cleanedText) {
-              const updatedText = (reportTextRef.current ? reportTextRef.current + ' ' : '') + cleanedText;
-              const finalFormatted = sanitizeReportText(updatedText);
-              setReportText(finalFormatted);
+              setReportText(prev => {
+                const base = prev.trim();
+                if (base && base.toLowerCase().includes(cleanedText.toLowerCase())) return base;
+                const updated = base ? (base + ' ' + cleanedText) : cleanedText;
+                return sanitizeReportText(updated);
+              });
             }
           } else {
             if (cleanedText) {
@@ -356,8 +419,14 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
         setTimeout(() => {
           try {
             if (recognitionRef.current && voiceModeRef.current !== 'off') {
-              recognitionRef.current.start();
-              console.log('[SAARTHI VOICE] Recognition restarted cleanly');
+              try {
+                recognitionRef.current.start();
+                console.log('[SAARTHI VOICE] Recognition restarted cleanly');
+              } catch (startErr) {
+                // If start fails because instance is stale, re-initialize engine
+                console.warn('[SAARTHI VOICE] Instance restart failed, re-initializing engine...');
+                startUnifiedSpeechEngine();
+              }
             }
           } catch (e: any) {
             console.warn('[SAARTHI VOICE] Error restarting recognition:', e?.message || e);
@@ -508,14 +577,21 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
   };
 
   const handleManualMicToggle = async () => {
+    consecutiveErrorsRef.current = 0; // Reset error counters on manual user interaction
+    lastErrorRef.current = '';
+
     if (voiceMode === 'dictating') {
       voiceModeRef.current = 'wake_listen';
       setVoiceMode('wake_listen');
       setMicStatus('wake_listening');
 
-      const textToSubmit = sanitizeReportText(reportTextRef.current);
-      if (textToSubmit && !isProcessing) {
-        onSubmitReport(textToSubmit);
+      const textToSubmit = getCombinedReportText();
+      if (textToSubmit) {
+        setReportText(textToSubmit);
+        setInterimTranscript('');
+        if (!isProcessingRef.current) {
+          onSubmitReport(textToSubmit);
+        }
       }
       return;
     }
@@ -533,294 +609,286 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reportText.trim() || isProcessing) return;
-    onSubmitReport(sanitizeReportText(reportText.trim()));
+    const textToSubmit = getCombinedReportText();
+    if (!textToSubmit || isProcessing) return;
+    setReportText(textToSubmit);
+    setInterimTranscript('');
+    onSubmitReport(textToSubmit);
   };
 
   return (
-    <section className="blueprint-card p-5 rounded-sm">
-      
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-cyan-500/20 pb-3 mb-4 flex-wrap gap-2">
-        <div>
-          <h2 className="text-lg font-bold text-amber-300 mono-font flex items-center gap-2">
-            <FileText className="w-5 h-5 text-amber-400" />
-            2. SITE REPORT INTAKE (DECIBEL VAD VOICE & TEXT)
-          </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Say <strong className="text-cyan-300 font-extrabold">"Hey Saarthi"</strong> to dictate. Automatically auto-submits when voice volume drops below decibel speech levels!
-          </p>
-        </div>
+    <div className="w-full flex flex-col items-center">
 
-        <div className="flex flex-wrap items-center gap-3">
-          
-          {/* Calibrate / Train Voice Modal Trigger */}
-          <button
-            type="button"
-            onClick={async () => {
-              if (!hasMicPermission) await startUnifiedSpeechEngine();
-              setTrainerStep(1);
-              setTrainerTranscripts([]);
-              setIsTrainerOpen(true);
-              startTrainerStep();
-            }}
-            className="flex items-center gap-1.5 px-3 py-1 text-xs mono-font font-bold bg-cyan-950 text-cyan-300 border border-cyan-400/60 hover:bg-cyan-900 rounded-xs transition-all cursor-pointer shadow-[0_0_10px_rgba(0,240,255,0.2)]"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            <span>🎯 TRAIN YOUR VOICE</span>
-          </button>
-
-          {/* Grant or Disable Microphone Button */}
-          {!hasMicPermission ? (
-            <button
-              type="button"
-              onClick={startUnifiedSpeechEngine}
-              className="flex items-center gap-1.5 px-3 py-1 text-xs mono-font font-bold bg-amber-500 text-slate-950 hover:bg-amber-400 rounded-xs transition-all cursor-pointer shadow-[0_0_10px_rgba(255,159,28,0.4)] animate-pulse"
-            >
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>ENABLE "HEY SAARTHI" MIC ACCESS</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={disableMicrophone}
-              className="flex items-center gap-1.5 px-3 py-1 text-xs mono-font font-bold bg-crimson-950/80 border border-crimson-500 text-crimson-300 hover:bg-crimson-900 rounded-xs transition-all cursor-pointer shadow-[0_0_10px_rgba(239,68,68,0.3)]"
-            >
-              <ShieldAlert className="w-3.5 h-3.5 text-crimson-400" />
-              <span>DISABLE MICROPHONE (PRIVACY)</span>
-            </button>
-          )}
-
-          {/* Mode Indicator Badge */}
-          <div className="flex items-center gap-1.5 px-3 py-1 text-xs mono-font border border-cyan-400/60 bg-cyan-950 text-cyan-300 rounded-xs">
-            <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-            <span>
-              MODE: {voiceMode === 'off' ? 'MIC OFF' : (voiceMode === 'wake_listen' ? 'LISTENING FOR "HEY SAARTHI"' : 'DICTATING REPORT')}
+      {/* Mode Bar / Technical Header */}
+      <section className="w-full bg-surface-container-low py-3 px-4 md:px-6 shadow-xs rounded-xl mb-6">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+            <span className="font-mono text-xs font-bold text-on-surface uppercase tracking-wider">SITE INTAKE // QUICK FIELD REPORT</span>
+            <span className="font-mono text-xs text-outline">//</span>
+            <span className="font-mono text-xs text-on-surface-variant flex items-center gap-1">
+              <Radio className="w-3.5 h-3.5 text-secondary animate-pulse" />
+              VOICE ENGINE: {voiceMode === 'off' ? 'MIC OFF' : (voiceMode === 'wake_listen' ? 'LISTENING FOR "HEY SAARTHI"' : 'DICTATING REPORT')}
             </span>
           </div>
-        </div>
-      </div>
 
-      {/* Wake Word Detection Alert Banner */}
-      {wakeWordDetected && (
-        <div className="mb-4 p-3.5 bg-cyan-950 border-2 border-cyan-400 rounded-xs text-xs mono-font text-cyan-200 flex items-center justify-between animate-bounce shadow-[0_0_20px_rgba(0,240,255,0.6)]">
-          <div className="flex items-center gap-2.5">
-            <Volume2 className="w-5 h-5 text-cyan-400" />
-            <span className="font-extrabold text-cyan-300 text-sm">⚡ WAKE WORD "HEY SAARTHI" DETECTED! LISTENING FOR FIELD REPORT NOW...</span>
-          </div>
-        </div>
-      )}
-
-      {/* Whisper Server Processing Banner */}
-      {isTranscribingWhisper && (
-        <div className="mb-4 p-3.5 bg-amber-950 border-2 border-amber-400 rounded-xs text-xs mono-font text-amber-200 flex items-center justify-between animate-pulse shadow-[0_0_20px_rgba(245,158,11,0.5)]">
-          <div className="flex items-center gap-2.5">
-            <Radio className="w-5 h-5 text-amber-400 animate-spin" />
-            <span className="font-extrabold text-amber-300 text-sm">🤖 TRANSCRIBING AUDIO VIA OPENAI WHISPER MODEL...</span>
-          </div>
-        </div>
-      )}
-
-      {/* Permission Warning if Denied */}
-      {micStatus === 'denied' && (
-        <div className="mb-4 p-3 bg-crimson-950/60 border border-crimson-500/50 rounded-xs text-xs mono-font text-crimson-300 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>
-            Microphone permission was denied by browser. Please click the camera/microphone icon in your browser URL bar to allow access.
-          </span>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        
-        {/* Quick Test Preset Chips */}
-        <div>
-          <span className="text-[11px] font-bold text-cyan-400 mono-font block mb-2 flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> QUICK TEST PRESETS (CLICK TO POPULATE):
-          </span>
-          <div className="flex flex-wrap gap-2">
-            {SAMPLE_REPORTS.map((sample, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => setReportText(sample)}
-                className="text-[11px] mono-font text-slate-300 bg-slate-900 hover:bg-cyan-950 hover:text-cyan-300 border border-cyan-500/30 hover:border-cyan-400 px-2.5 py-1.5 rounded-xs text-left transition-all cursor-pointer"
-              >
-                "{sample}"
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Free-Form Text Area & Active Dictation Overlay */}
-        <div className="relative">
-          <textarea
-            rows={4}
-            required
-            placeholder={
-              hasMicPermission 
-                ? "Say 'Hey Saarthi' aloud anytime to dictate hands-free. Stops automatically when your voice volume drops below decibel speech levels..." 
-                : "Click 'ENABLE HEY SAARTHI MIC ACCESS' above to start voice commands, or type field updates here..."
-            }
-            value={reportText}
-            onChange={(e) => setReportText(e.target.value)}
-            className="w-full bg-slate-950 border border-cyan-500/40 focus:border-cyan-400 text-slate-100 p-3 text-xs mono-font rounded-xs focus:outline-none focus:ring-1 focus:ring-cyan-400/50 resize-none shadow-inner"
-          />
-
-          {/* Active Dictation & Decibel Meter Overlay */}
-          {voiceMode === 'dictating' && (
-            <div className="absolute inset-0 bg-slate-950/95 backdrop-blur-xs flex flex-col items-center justify-center p-4 border border-amber-400/80 rounded-xs z-20">
-              
-              {/* Waveform Visualization */}
-              <div className="flex items-center gap-1.5 h-12 mb-2">
-                {audioWaveform.map((h, i) => (
-                  <div
-                    key={i}
-                    className="w-2 bg-gradient-to-t from-amber-500 to-cyan-400 rounded-full transition-all duration-100 shadow-[0_0_10px_#ff9f1c]"
-                    style={{ height: `${h}%` }}
-                  ></div>
-                ))}
-              </div>
-
-              {/* Decibel Volume Level Gauge */}
-              <div className="flex items-center gap-2 mb-2 text-xs mono-font">
-                <span className="text-slate-400 text-[11px]">VOICE VOLUME DECIBEL:</span>
-                <span className={`font-bold px-2 py-0.5 rounded-xs border ${
-                  decibelLevel >= HUMAN_SPEECH_DECIBEL_THRESHOLD
-                    ? 'text-emerald-300 bg-emerald-950 border-emerald-500'
-                    : 'text-amber-400 bg-amber-950 border-amber-500/50'
-                }`}>
-                  {decibelLevel}% {decibelLevel >= HUMAN_SPEECH_DECIBEL_THRESHOLD ? '(HUMAN VOICE)' : '(SUB-HUMAN SILENCE)'}
-                </span>
-              </div>
-
-              <p className="text-xs font-bold text-amber-300 mono-font animate-pulse flex items-center gap-1.5 mb-1">
-                <PulseIcon className="w-4 h-4 text-amber-400 animate-spin" />
-                DICTATING REPORT... PAUSE FOR 1.4s TO AUTO-SUBMIT & SYNC!
-              </p>
-
-              {interimTranscript && (
-                <p className="text-xs text-cyan-300 italic mono-font bg-slate-900 px-3 py-1 border border-cyan-500/40 rounded-xs mt-1 max-w-lg text-center truncate">
-                  "{interimTranscript}"
-                </p>
-              )}
-
-              <button
-                type="button"
-                onClick={handleManualMicToggle}
-                className="mt-3 px-3 py-1 bg-amber-400 text-slate-950 font-extrabold text-[11px] mono-font rounded-xs hover:bg-amber-300 cursor-pointer"
-              >
-                FINISH & SYNC REPORT NOW
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Action Controls */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-          
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={handleManualMicToggle}
-              className={`flex items-center gap-2 px-3.5 py-2 text-xs mono-font font-bold border rounded-xs transition-all cursor-pointer ${
-                voiceMode === 'dictating' 
-                  ? 'bg-amber-950 text-amber-300 border-amber-400 animate-pulse shadow-[0_0_12px_rgba(255,159,28,0.5)]' 
-                  : 'bg-slate-900 text-cyan-300 border-cyan-400 hover:bg-cyan-950 hover:shadow-[0_0_10px_rgba(0,240,255,0.3)]'
-              }`}
+              onClick={async () => {
+                if (!hasMicPermission) await startUnifiedSpeechEngine();
+                setTrainerStep(1);
+                setTrainerTranscripts([]);
+                setIsTrainerOpen(true);
+                startTrainerStep();
+              }}
+              className="px-3 py-1.5 rounded-full bg-surface-container text-on-surface hover:bg-surface-container-high font-mono text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
             >
-              {voiceMode === 'dictating' ? <MicOff className="w-4 h-4 text-amber-400" /> : <Mic className="w-4 h-4 text-cyan-400 animate-bounce" />}
-              <span>{voiceMode === 'dictating' ? 'STOP DICTATION' : 'ACTIVATE MIC MANUALLY'}</span>
+              <Sparkles className="w-3.5 h-3.5 text-secondary" />
+              <span>TRAIN VOICE</span>
             </button>
 
-            {hasMicPermission ? (
-              <span className="text-[11px] text-cyan-400 mono-font flex items-center gap-1 animate-pulse">
-                <Radio className="w-3.5 h-3.5 text-cyan-400" />
-                Listening for wake word <strong className="text-amber-300">"Hey Saarthi"</strong>
-              </span>
+            {!hasMicPermission ? (
+              <button
+                type="button"
+                onClick={startUnifiedSpeechEngine}
+                className="px-4 py-1.5 rounded-full bg-amber-500 text-slate-950 hover:bg-amber-400 font-mono text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer animate-pulse shadow-sm"
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>ENABLE MIC ACCESS</span>
+              </button>
             ) : (
-              <span className="text-[11px] text-amber-400 mono-font">
-                ⚠️ Click "ENABLE HEY SAARTHI MIC ACCESS" above to activate hands-free mode
-              </span>
+              <button
+                type="button"
+                onClick={disableMicrophone}
+                className="px-3 py-1.5 rounded-full bg-red-100 text-red-700 hover:bg-red-200 font-mono text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
+              >
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <span>DISABLE MIC</span>
+              </button>
             )}
-          </div>
 
-          {/* Sensitivity Selector */}
-          <div className="flex items-center gap-2 text-xs mono-font">
-            <Sliders className="w-3.5 h-3.5 text-slate-400" />
-            <span className="text-slate-400">Sensitivity:</span>
             <button
               type="button"
               onClick={() => setSensitivity(s => s === 'high' ? 'standard' : 'high')}
-              className={`px-2 py-0.5 rounded-xs border text-[11px] cursor-pointer ${
+              className={`px-3 py-1.5 rounded-full font-mono text-xs font-semibold border cursor-pointer transition-all ${
                 sensitivity === 'high'
-                  ? 'bg-emerald-950 text-emerald-300 border-emerald-500'
-                  : 'bg-slate-900 text-slate-400 border-slate-700'
+                  ? 'bg-secondary-container text-on-secondary-container border-secondary/30'
+                  : 'bg-surface-container text-on-surface-variant border-transparent'
               }`}
             >
-              {sensitivity === 'high' ? 'High Fuzzy Match' : 'Standard'}
+              {sensitivity === 'high' ? 'Sensitivity: High' : 'Sensitivity: Standard'}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* Main Glove-First Interaction Canvas */}
+      <section className="w-full py-6 md:py-10 px-4 md:px-6 flex flex-col items-center justify-center relative overflow-hidden bg-surface-container-lowest border border-surface-container-high rounded-2xl shadow-sm mb-6">
+        {/* Ambient Radial Glow */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-secondary-container/30 rounded-full blur-3xl pointer-events-none -z-10"></div>
+
+        <div className="w-full max-w-3xl mx-auto flex flex-col items-center text-center">
+          
+          {/* Wake Word Detection Alert Banner */}
+          {wakeWordDetected && (
+            <div className="w-full mb-6 p-3 bg-secondary-container border border-secondary text-on-secondary-container rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 animate-bounce shadow-md">
+              <Volume2 className="w-4 h-4 text-secondary" />
+              <span>WAKE WORD "HEY SAARTHI" DETECTED! LISTENING FOR FIELD REPORT NOW...</span>
+            </div>
+          )}
+
+          {/* Whisper Server Processing Banner */}
+          {isTranscribingWhisper && (
+            <div className="w-full mb-6 p-3 bg-amber-100 border border-amber-400 text-amber-900 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-2 animate-pulse shadow-md">
+              <PulseIcon className="w-4 h-4 text-amber-700 animate-spin" />
+              <span>TRANSCRIBING AUDIO VIA OPENAI WHISPER MODEL...</span>
+            </div>
+          )}
+
+          {/* Permission Warning if Denied */}
+          {micStatus === 'denied' && (
+            <div className="w-full mb-6 p-3 bg-red-100 border border-red-300 text-red-800 rounded-xl text-xs font-mono flex items-center justify-center gap-2">
+              <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+              <span>Microphone permission denied by browser. Please allow microphone access in your browser settings.</span>
+            </div>
+          )}
+
+          {/* Push-To-Talk Voice Hub */}
+          <div className="relative flex items-center justify-center my-4 select-none">
+            <div className={`absolute w-56 h-56 rounded-full bg-secondary-container/40 ${voiceMode === 'dictating' ? 'animate-ping opacity-70' : 'opacity-20'}`}></div>
+            <div className={`absolute w-48 h-48 rounded-full bg-secondary-container/50 ${voiceMode === 'dictating' ? 'animate-pulse opacity-90' : 'opacity-40'}`}></div>
+            
+            <button
+              type="button"
+              onClick={handleManualMicToggle}
+              className={`relative group w-44 h-44 rounded-full flex flex-col items-center justify-center shadow-xl transition-all duration-200 focus:outline-none ring-4 ring-offset-4 ring-offset-surface cursor-pointer ${
+                voiceMode === 'dictating'
+                  ? 'bg-amber-500 text-slate-950 ring-amber-400 animate-pulse'
+                  : 'bg-primary-container text-on-primary ring-secondary hover:scale-105'
+              }`}
+            >
+              {voiceMode === 'dictating' ? (
+                <>
+                  <MicOff className="w-14 h-14 text-slate-950 mb-1" />
+                  <span className="font-mono text-xs font-black tracking-widest uppercase">DICTATING...</span>
+                  <span className="font-mono text-[9px] text-slate-900 tracking-wider mt-0.5">CLICK TO FINISH & SYNC</span>
+                </>
+              ) : (
+                <>
+                  <Mic className="w-14 h-14 text-on-primary group-hover:scale-110 transition-transform duration-200 mb-1" />
+                  <span className="font-mono text-xs font-black text-secondary-fixed tracking-widest uppercase">PUSH TO TALK</span>
+                  <span className="font-mono text-[9px] text-on-primary-container tracking-wider mt-0.5">OR SAY "HEY SAARTHI"</span>
+                </>
+              )}
             </button>
           </div>
 
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={!reportText.trim() || isProcessing}
-            className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-cyan-500 to-emerald-400 text-slate-950 font-extrabold text-xs mono-font rounded-xs hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shadow-[0_0_15px_rgba(0,240,255,0.4)]"
-          >
-            <Send className="w-4 h-4" />
-            <span>{isProcessing ? 'ANALYZING MATCH...' : 'MATCH & EVALUATE REPORT'}</span>
-          </button>
-        </div>
+          {/* State Indicator */}
+          <div className="mt-2 flex flex-col items-center gap-1">
+            <h2 className="text-xl md:text-2xl font-bold tracking-tight text-on-surface">
+              {voiceMode === 'dictating' ? (
+                <span className="text-amber-700 font-extrabold flex items-center gap-2">
+                  <PulseIcon className="w-5 h-5 text-amber-600 animate-spin" />
+                  Dictating Field Report... Pause 1.4s to Auto-Submit
+                </span>
+              ) : (
+                <>Tap button or Say <span className="text-secondary underline decoration-2 underline-offset-4">“Hey Saarthi”</span> to dictate</>
+              )}
+            </h2>
+            <p className="text-xs md:text-sm text-on-surface-variant max-w-lg">
+              Calibrated for high acoustic background noise (pumps, rebar cutters, diesel excavators).
+            </p>
+          </div>
 
+          {/* Live Dynamic Audio Frequency Visualizer */}
+          <div className="h-9 flex items-center justify-center gap-1.5 mt-4 px-6 py-1 bg-surface-container rounded-full">
+            {audioWaveform.map((h, i) => (
+              <span
+                key={i}
+                className="w-1.5 rounded-full bg-secondary transition-all duration-100"
+                style={{ height: `${Math.max(8, (h / 100) * 32)}px` }}
+              />
+            ))}
+          </div>
+
+          {/* Decibel Volume Level Gauge when dictating */}
+          {voiceMode === 'dictating' && (
+            <div className="mt-3 flex items-center gap-2 font-mono text-xs">
+              <span className="text-on-surface-variant text-[11px]">VOICE VOLUME DECIBEL:</span>
+              <span className={`font-bold px-2 py-0.5 rounded border ${
+                decibelLevel >= HUMAN_SPEECH_DECIBEL_THRESHOLD
+                  ? 'text-emerald-800 bg-emerald-100 border-emerald-300'
+                  : 'text-amber-800 bg-amber-100 border-amber-300'
+              }`}>
+                {decibelLevel}% {decibelLevel >= HUMAN_SPEECH_DECIBEL_THRESHOLD ? '(HUMAN VOICE)' : '(SILENCE PAUSE)'}
+              </span>
+            </div>
+          )}
+
+          {interimTranscript && (
+            <div className="mt-3 p-2 bg-surface-container-high border border-surface-container-highest rounded-lg max-w-lg text-xs font-mono text-secondary italic truncate">
+              "{interimTranscript}"
+            </div>
+          )}
+
+          {/* Glove-Friendly Preset Dictation Chips */}
+          <div className="w-full mt-6">
+            <div className="font-mono text-[11px] font-bold text-outline uppercase tracking-wider mb-2">
+              TAP QUICK SAMPLE PROMPTS TO AUTO-FILL:
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {SAMPLE_REPORTS.map((sample, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setReportText(sample)}
+                  className="px-3 py-2 bg-surface-container hover:bg-surface-container-high text-on-surface font-mono text-xs rounded-xl shadow-xs transition-all duration-150 active:scale-95 text-left cursor-pointer border border-surface-container-high"
+                >
+                  "{sample}"
+                </button>
+              ))}
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {/* Manual Input & Submission Panel */}
+      <form onSubmit={handleSubmit} className="w-full bg-surface-container-lowest rounded-2xl p-4 md:p-6 shadow-sm border border-surface-container-high text-left">
+        <div className="flex flex-col md:flex-row items-stretch gap-3">
+          {/* Text Input Field */}
+          <div className="relative flex-1 min-w-0">
+            <textarea
+              rows={3}
+              required
+              placeholder="Or type report manually (e.g. Raft Foundation concrete pour in Zone A reached 85% completion today...)"
+              value={reportText}
+              onChange={(e) => setReportText(e.target.value)}
+              className="w-full p-3.5 bg-surface-container-low text-on-surface placeholder:text-outline font-sans text-sm rounded-xl focus:outline-none focus:bg-surface focus:ring-2 focus:ring-secondary transition-all border border-surface-container-high resize-none"
+            />
+          </div>
+
+          {/* Action Button Strip */}
+          <div className="flex items-center gap-2 md:flex-col justify-end">
+            <button
+              type="submit"
+              disabled={(!reportText.trim() && !interimTranscript.trim()) || isProcessing}
+              className="h-14 px-6 bg-primary-container hover:bg-primary text-on-primary font-bold text-sm rounded-xl flex items-center justify-center gap-2 shrink-0 shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer w-full md:w-auto"
+            >
+              <Send className="w-4 h-4 text-secondary-fixed" />
+              <span>{isProcessing ? 'ANALYZING...' : 'Process Report'}</span>
+            </button>
+          </div>
+        </div>
       </form>
 
       {/* VOICE TRAINER MODAL */}
       {isTrainerOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="blueprint-card max-w-md w-full p-6 rounded-sm border-cyan-400 text-xs mono-font space-y-4">
-            <div className="flex justify-between items-center border-b border-cyan-500/30 pb-3">
-              <h3 className="font-extrabold text-cyan-300 text-sm flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-cyan-400" />
+        <div className="fixed inset-0 z-50 bg-primary/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-surface-container-lowest max-w-md w-full p-6 rounded-2xl border border-surface-container-high text-xs font-mono space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-surface-container-high pb-3">
+              <h3 className="font-extrabold text-on-surface text-sm flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-secondary" />
                 CALIBRATE YOUR VOICE FOR "HEY SAARTHI"
               </h3>
-              <span className="text-[10px] text-amber-400 border border-amber-500/40 px-1.5 py-0.5 rounded-xs">
+              <span className="text-[10px] text-secondary font-bold border border-secondary/30 px-2 py-0.5 rounded-full bg-secondary-container">
                 STEP {trainerStep} OF 3
               </span>
             </div>
 
             {trainerStep <= 3 ? (
               <div className="space-y-4 text-center py-4">
-                <p className="text-slate-200">
-                  Please speak <strong className="text-amber-300 text-base block my-1">"Hey Saarthi"</strong> into your microphone now ({trainerStep}/3).
+                <p className="text-on-surface">
+                  Please speak <strong className="text-secondary text-base block my-1">"Hey Saarthi"</strong> into your microphone now ({trainerStep}/3).
                 </p>
-                <div className="w-16 h-16 rounded-full bg-cyan-950 border-2 border-cyan-400 text-cyan-400 flex items-center justify-center mx-auto animate-pulse shadow-[0_0_15px_rgba(0,240,255,0.4)]">
+                <div className="w-16 h-16 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center mx-auto animate-pulse shadow-md">
                   <Mic className="w-8 h-8" />
                 </div>
-                <p className="text-[11px] text-slate-400 italic">
+                <p className="text-[11px] text-on-surface-variant italic">
                   Saarthi engine is listening to calibrate your voice and accent pattern...
                 </p>
                 <button
                   type="button"
                   onClick={startTrainerStep}
-                  className="px-3 py-1 bg-slate-900 border border-cyan-500/40 text-cyan-300 rounded-xs cursor-pointer"
+                  className="px-4 py-2 bg-primary-container text-on-primary rounded-xl cursor-pointer font-bold"
                 >
                   Click to Speak Step {trainerStep}
                 </button>
               </div>
             ) : (
               <div className="space-y-4 py-2">
-                <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
                   <span>VOICE CALIBRATION COMPLETE!</span>
                 </div>
-                <p className="text-slate-300 text-[11px]">
+                <p className="text-on-surface-variant text-[11px]">
                   Registered your accent audio patterns:
                 </p>
-                <div className="bg-slate-950 p-2 border border-cyan-500/30 rounded-xs space-y-1 text-cyan-300">
+                <div className="bg-surface-container p-3 rounded-xl space-y-1 text-on-surface">
                   {trainerTranscripts.map((t, idx) => (
                     <div key={idx} className="flex items-center gap-2">
-                      <span className="text-amber-400 font-bold">•</span> "{t}"
+                      <span className="text-secondary font-bold">•</span> "{t}"
                     </div>
                   ))}
                 </div>
@@ -830,18 +898,18 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
                     setIsTrainerOpen(false);
                     if (hasMicPermission) startUnifiedSpeechEngine();
                   }}
-                  className="w-full py-2 bg-emerald-400 text-slate-950 font-bold rounded-xs cursor-pointer shadow-[0_0_10px_rgba(16,185,129,0.4)]"
+                  className="w-full py-2.5 bg-secondary-container text-on-secondary-container font-bold rounded-xl cursor-pointer shadow-sm hover:bg-secondary-fixed transition-colors"
                 >
                   SAVE & RETURN TO APP
                 </button>
               </div>
             )}
 
-            <div className="pt-2 border-t border-cyan-500/20 flex justify-end">
+            <div className="pt-2 border-t border-surface-container-high flex justify-end">
               <button
                 type="button"
                 onClick={() => setIsTrainerOpen(false)}
-                className="text-slate-400 hover:text-slate-200 text-[11px] underline cursor-pointer"
+                className="text-on-surface-variant hover:text-on-surface text-[11px] underline cursor-pointer"
               >
                 Close Trainer
               </button>
@@ -850,6 +918,6 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
         </div>
       )}
 
-    </section>
+    </div>
   );
 };

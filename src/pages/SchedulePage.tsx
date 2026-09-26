@@ -11,7 +11,7 @@ export const SchedulePage: React.FC = () => {
   } = useScheduleContext();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-200">
       <ScheduleBuilder
         activities={activities}
         onAddActivity={handleAddActivity}
@@ -21,3 +21,4 @@ export const SchedulePage: React.FC = () => {
     </div>
   );
 };
+

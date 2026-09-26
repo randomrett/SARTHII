@@ -29,3 +29,4 @@ class MatchResultSchema(BaseModel):
 class MatchRequest(BaseModel):
     report_text: str
     activities: Optional[List[ActivityOut]] = None
+    use_gemini: Optional[bool] = False

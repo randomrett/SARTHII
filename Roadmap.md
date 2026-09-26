@@ -35,9 +35,9 @@ This tracks what's built vs. what's left, based on the official SIH idea submiss
 
 ## 🧠 AI/NLP upgrade
 
-- [ ] Real semantic matching via sentence-transformers/SBERT (currently token-overlap + synonym dictionary + Levenshtein, no real embeddings)
-- [ ] LLM-based unstructured text extraction (deck references Gemini/GPT for this — note the frontend already has an unwired "Use Live Gemini API" toggle stub)
-- [ ] Computer vision for site photo analysis (deck references YOLO)
+- [x] Real semantic matching via sentence-transformers/SBERT (wired in backend `app.services.semantic_matcher`)
+- [x] LLM-based unstructured text extraction (Task 2 Gemini Hybrid extraction mode)
+- [x] Computer vision / vision analysis for site photo analysis (Task 3 Gemini Vision OCR & defect detection)
 
 ## 👤 Human-in-the-loop workflow
 

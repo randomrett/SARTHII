@@ -32,11 +32,11 @@ def _get_api_key() -> str:
     return key
 
 def _sanitize_model_name(model_name: Optional[str] = None) -> str:
-    chosen = model_name or settings.GEMINI_MODEL or "gemini-2.0-flash"
+    chosen = model_name or settings.GEMINI_MODEL or "gemini-1.5-flash"
     chosen_lower = chosen.lower()
     if "pro" in chosen_lower and not ("flash" in chosen_lower):
-        logger.warning(f"Pro model '{chosen}' requested; switching to free-tier Flash model 'gemini-2.0-flash'.")
-        return "gemini-2.0-flash"
+        logger.warning(f"Pro model '{chosen}' requested; switching to free-tier Flash model 'gemini-1.5-flash'.")
+        return "gemini-1.5-flash"
     return chosen
 
 def _handle_gemini_exception(e: Exception):
@@ -364,3 +364,103 @@ def analyze_video_with_gemini(
         raise
     except Exception as e:
         _handle_gemini_exception(e)
+
+
+def extract_report_entities_with_gemini(
+    raw_report_text: str,
+    custom_prompt: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Task 2: Sends report text to Gemini for structured JSON entity extraction.
+    Parses response defensively, handles 429 quota errors gracefully without crashing.
+    """
+    api_key = settings.get_gemini_api_key(enforce=False)
+    if not api_key:
+        logger.info("[GEMINI TEXT EXTRACT] GEMINI_API_KEY not set, using basic extraction.")
+        return {}
+
+    model_name = _sanitize_model_name()
+
+    prompt = custom_prompt or (
+        "You are an expert construction site monitor analyzing a field report.\n"
+        f"Report text: \"{raw_report_text}\"\n\n"
+        "Extract the construction activity, location zone, progress %, and status.\n"
+        "Respond strictly with a single valid JSON object containing these exact keys:\n"
+        "{\n"
+        '  "activity_guess": "Name of activity (e.g. Raft Foundation, Concrete Pour) or null",\n'
+        '  "zone_guess": "Zone name (e.g. Zone A, Pier 4, Shaft B) or null",\n'
+        '  "progress_guess": 85.0,\n'
+        '  "status_guess": "in_progress or completed or not_started or null"\n'
+        "}"
+    )
+
+    try:
+        raw_response_text = ""
+        try:
+            from google import genai
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
+            raw_response_text = response.text or ""
+        except (ImportError, Exception) as genai_err:
+            if any(kw in str(genai_err).lower() for kw in ["429", "quota", "resourceexhausted"]):
+                raise GeminiRateLimitError("AI extraction unavailable, using basic extraction")
+
+            import google.generativeai as legacy_genai
+            legacy_genai.configure(api_key=api_key)
+            model = legacy_genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt)
+            raw_response_text = response.text or ""
+
+        parsed = parse_defensive_json(raw_response_text)
+        logger.info(f"[GEMINI HYBRID EXTRACT SUCCESS] {parsed}")
+        return parsed
+    except GeminiRateLimitError:
+        logger.warning("[GEMINI TEXT EXTRACT] Gemini API rate limited (429). AI extraction unavailable, using basic extraction.")
+        return {}
+    except Exception as e:
+        logger.warning(f"[GEMINI TEXT EXTRACT] Gemini API error: {e}. AI extraction unavailable, using basic extraction.")
+        return {}
+
+
+def extract_fields_hybrid(raw_report_text: str, force_gemini: bool = False) -> Dict[str, Any]:
+    """
+    Task 2 Hybrid Mode: Runs deterministic regex extraction first.
+    Only calls Gemini LLM if regex extraction comes back with missing fields
+    (e.g., no zone found or no progress % found) OR if force_gemini is True.
+    """
+    from app.utils.matching import extract_entities_from_report
+
+    regex_entities = extract_entities_from_report(raw_report_text)
+    zone_guess = regex_entities.get("zoneKeyword")
+    progress_guess = regex_entities.get("extractedProgress")
+
+    extraction_source = "regex"
+
+    # Call Gemini ONLY when regex is incomplete or force_gemini toggle is enabled
+    needs_gemini = force_gemini or (zone_guess is None) or (progress_guess is None)
+
+    if needs_gemini:
+        gemini_parsed = extract_report_entities_with_gemini(raw_report_text)
+        if gemini_parsed:
+            if not zone_guess and gemini_parsed.get("zone_guess"):
+                zone_guess = gemini_parsed.get("zone_guess")
+                extraction_source = "gemini"
+            if progress_guess is None and gemini_parsed.get("progress_guess") is not None:
+                try:
+                    progress_guess = float(gemini_parsed["progress_guess"])
+                    extraction_source = "gemini"
+                except (ValueError, TypeError):
+                    pass
+            if force_gemini and (gemini_parsed.get("zone_guess") or gemini_parsed.get("progress_guess") is not None):
+                extraction_source = "gemini"
+
+    return {
+        "zone_guess": zone_guess,
+        "progress_guess": progress_guess,
+        "extraction_source": extraction_source,
+        "regex_entities": regex_entities
+    }
+

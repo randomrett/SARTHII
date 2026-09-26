@@ -20,7 +20,7 @@ class Settings(BaseSettings):
 
     # Gemini API Key & Model Configuration
     GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-2.0-flash"
+    GEMINI_MODEL: str = "gemini-1.5-flash"
 
     model_config = SettingsConfigDict(
         env_file=(str(ROOT_DIR / ".env"), str(BASE_DIR / ".env")),

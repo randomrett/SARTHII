@@ -52,6 +52,26 @@ def startup_event():
     else:
         print(f"[SAARTHI STARTUP] GEMINI_API_KEY loaded successfully. Active Model: {settings.GEMINI_MODEL}")
 
+    # Refresh Semantic Matcher schedule cache on startup
+    try:
+        from app.database import SessionLocal
+        from app.models.activity import Activity
+        from app.services.semantic_matcher import refresh_schedule
+
+        db = SessionLocal()
+        db_acts = db.query(Activity).all()
+        acts_data = [
+            {
+                "id": a.id, "name": a.name, "zone": a.zone,
+                "category": a.category, "status": a.status, "progress": a.progress
+            }
+            for a in db_acts
+        ]
+        refresh_schedule(acts_data)
+        db.close()
+    except Exception as e:
+        print(f"[SAARTHI STARTUP WARN] Could not pre-cache schedule embeddings: {e}")
+
 # Root Health Check
 @app.get("/health", tags=["Health"])
 def health_check():

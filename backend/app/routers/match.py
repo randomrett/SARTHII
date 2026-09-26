@@ -5,7 +5,7 @@ from app.database import get_db
 from app.models.report import Report
 from app.models.activity import Activity
 from app.schemas.match import MatchRequest, MatchResultSchema
-from app.utils.matching import match_report_to_schedule
+from app.services.matching import match_report
 
 router = APIRouter(tags=["Matching Engine"])
 
@@ -36,7 +36,7 @@ def match_standalone(request: MatchRequest, db: Session = Depends(get_db)):
             for a in db_activities
         ]
 
-    results = match_report_to_schedule(report_text, activities_data)
+    results = match_report(report_text, activities_data, force_gemini=getattr(request, 'use_gemini', False))
     return results
 
 @router.post("/reports/{report_id}/match", response_model=List[MatchResultSchema])
@@ -68,5 +68,5 @@ def match_saved_report(report_id: str, db: Session = Depends(get_db)):
         for a in db_activities
     ]
 
-    results = match_report_to_schedule(report.raw_text, activities_data)
+    results = match_report(report.raw_text, activities_data)
     return results
