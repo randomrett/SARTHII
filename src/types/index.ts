@@ -65,3 +65,14 @@ export interface SchedulePreset {
   description: string;
   activities: Activity[];
 }
+
+export type UserRole = 'admin' | 'manager' | 'field_worker';
+
+export interface User {
+  id: string;
+  email: string;
+  full_name?: string;
+  role: UserRole;
+  created_at?: string;
+}
+

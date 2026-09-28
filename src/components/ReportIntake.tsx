@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, Mic, Sparkles, Activity as PulseIcon, AlertCircle, Radio, Volume2, ShieldCheck, ShieldAlert, CheckCircle2, Square } from 'lucide-react';
 import { normalizeSpokenReport } from '../utils/constructionPhonetics';
+import { API_BASE_URL } from '../utils/api';
 
 interface ReportIntakeProps {
   onSubmitReport: (reportText: string) => void;
@@ -236,7 +237,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
 
       try {
         setIsTranscribingWhisper(true);
-        const res = await fetch('http://localhost:8000/api/v1/reports/transcribe', {
+        const res = await fetch(`${API_BASE_URL}/reports/transcribe`, {
           method: 'POST',
           body: formData
         });
@@ -247,6 +248,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
             console.log('⚡ [WHISPER TRANSCRIPTION RESULT]:', data.text);
             const cleanedText = sanitizeReportText(data.text);
             setReportText(cleanedText);
+            reportTextRef.current = cleanedText;
             setIsTranscribingWhisper(false);
             
             if (cleanedText && !isProcessingRef.current) {
@@ -499,8 +501,9 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!reportText.trim() || isProcessing) return;
-    const cleanText = sanitizeReportText(reportText);
+    const textToSubmit = reportText.trim() || reportTextRef.current.trim();
+    if (!textToSubmit || isProcessing || isTranscribingWhisper) return;
+    const cleanText = sanitizeReportText(textToSubmit);
     onSubmitReport(cleanText);
   };
 
@@ -715,11 +718,25 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
           <div className="flex items-center gap-2 md:flex-col justify-end">
             <button
               type="submit"
-              disabled={!reportText.trim() || isProcessing}
+              disabled={(!reportText.trim() && !reportTextRef.current.trim()) || isProcessing || isTranscribingWhisper}
               className="h-14 px-6 bg-slate-900 text-white hover:bg-slate-800 font-extrabold text-sm rounded-xl flex items-center justify-center gap-2 shrink-0 shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer w-full md:w-auto"
             >
-              <Send className="w-4 h-4 text-emerald-400" />
-              <span className="text-white font-bold">{isProcessing ? 'PROCESSING...' : 'Process Report'}</span>
+              {isProcessing ? (
+                <>
+                  <PulseIcon className="w-4 h-4 text-emerald-400 animate-spin" />
+                  <span className="text-white font-bold">Evaluating…</span>
+                </>
+              ) : isTranscribingWhisper ? (
+                <>
+                  <PulseIcon className="w-4 h-4 text-amber-400 animate-spin" />
+                  <span className="text-white font-bold">TRANSCRIBING…</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4 text-emerald-400" />
+                  <span className="text-white font-bold">Match & Evaluate</span>
+                </>
+              )}
             </button>
           </div>
         </div>

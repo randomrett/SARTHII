@@ -1,12 +1,12 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
     full_name: Optional[str] = None
-    role: Optional[str] = "supervisor"
+    role: Optional[str] = "field_worker"
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -22,9 +22,15 @@ class UserOut(BaseModel):
     class Config:
         from_attributes = True
 
+class UserRoleUpdate(BaseModel):
+    role: str
+
 class Token(BaseModel):
     access_token: str
     token_type: str
+    user: UserOut
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+    role: Optional[str] = None
+

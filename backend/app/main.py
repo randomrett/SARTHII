@@ -22,14 +22,12 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 # Configure CORS Middleware
+cors_origins_list = [origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-        "*"
-    ],
+    allow_origins=cors_origins_list if cors_origins_list else ["*"],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,13 +50,15 @@ def startup_event():
     else:
         print(f"[SAARTHI STARTUP] GEMINI_API_KEY loaded successfully. Active Model: {settings.GEMINI_MODEL}")
 
-    # Refresh Semantic Matcher schedule cache on startup
+    # Seed default demo users (admin, manager, field_worker) if database empty
     try:
         from app.database import SessionLocal
         from app.models.activity import Activity
         from app.services.semantic_matcher import refresh_schedule
+        from app.routers.auth import seed_default_users_if_empty
 
         db = SessionLocal()
+        seed_default_users_if_empty(db)
         db_acts = db.query(Activity).all()
         acts_data = [
             {
@@ -106,3 +106,5 @@ app.include_router(transcribe_router, prefix=settings.API_V1_STR)
 app.include_router(ingest_router, prefix=settings.API_V1_STR)
 app.include_router(websocket_router)
 app.include_router(websocket_router, prefix=settings.API_V1_STR)
+# Reload trigger
+

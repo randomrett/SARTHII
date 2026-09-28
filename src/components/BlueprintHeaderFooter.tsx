@@ -1,5 +1,5 @@
 import React from 'react';
-import { Compass, Cpu, Layers, ShieldCheck, Zap, Bot } from 'lucide-react';
+import { Compass, Cpu, Layers, Zap, Bot } from 'lucide-react';
 import type { SchedulePreset } from '../types';
 import { SCHEDULE_PRESETS } from '../utils/presets';
 
@@ -158,20 +158,12 @@ export const BlueprintHeader: React.FC<HeaderProps> = ({
 export const BlueprintFooter: React.FC = () => {
   return (
     <footer className="mt-12 p-4 rounded-xl border border-outline/20 bg-surface-container-lowest text-xs font-mono text-on-surface-variant shadow-sm">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 divide-y md:divide-y-0 md:divide-x divide-outline/15">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 divide-y md:divide-y-0 md:divide-x divide-outline/15">
         
         <div className="pr-2">
           <span className="text-[10px] text-primary font-bold block uppercase tracking-wider">DRAWING TITLE</span>
           <span className="text-sm font-bold text-on-surface block font-sans">SAARTHI CONSTRUCTION AI DASHBOARD</span>
           <span className="text-[10px] text-on-surface-variant">ZERO-TOUCH AUTONOMOUS SITE AUDIT INSTRUMENT</span>
-        </div>
-
-        <div className="pt-2 md:pt-0 md:px-4">
-          <span className="text-[10px] text-primary font-bold block uppercase tracking-wider">STAMP / CERTIFICATION</span>
-          <div className="flex items-center gap-2 mt-1 font-sans">
-            <ShieldCheck className="w-4 h-4 text-secondary" />
-            <span className="text-secondary font-bold">AUTONOMOUS SCHEDULE SYNC ACTIVE</span>
-          </div>
         </div>
 
         <div className="pt-2 md:pt-0 md:px-4">

@@ -1,11 +1,11 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { Compass, Home, LayoutDashboard, Calendar, FileText, Settings as SettingsIcon, WifiOff, RefreshCw, CheckCircle, X, AlertTriangle } from 'lucide-react';
+import { Compass, Home, LayoutDashboard, Calendar, FileText, Settings as SettingsIcon, WifiOff, RefreshCw, CheckCircle, X, AlertTriangle, LogOut } from 'lucide-react';
 import { useScheduleContext } from '../context/ScheduleContext';
+import { useAuth } from '../context/AuthContext';
 
 export const Navbar: React.FC = () => {
   const {
-    autoApproveMode,
     auditRecords,
     pendingAuditRecords,
     offlineQueueCount,
@@ -15,16 +15,29 @@ export const Navbar: React.FC = () => {
     dismissToastNotification
   } = useScheduleContext();
 
-  const navItems = [
-    { path: '/', label: 'Home (Report Intake)', icon: Home },
-    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: pendingAuditRecords.length > 0 ? pendingAuditRecords.length : undefined },
-    { path: '/schedule', label: 'Schedule', icon: Calendar },
-    { path: '/audit', label: 'Audit Trail', icon: FileText, badge: auditRecords.length },
-    { path: '/settings', label: 'Settings', icon: SettingsIcon },
+  const { currentUser, logout } = useAuth();
+  const role = currentUser?.role || 'field_worker';
+
+  const allNavItems = [
+    { path: '/', label: 'Home (Report Intake)', icon: Home, roles: ['field_worker', 'manager', 'admin'] },
+    { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, badge: pendingAuditRecords.length > 0 ? pendingAuditRecords.length : undefined, roles: ['manager', 'admin'] },
+    { path: '/schedule', label: 'Schedule', icon: Calendar, roles: ['admin'] },
+    { path: '/audit', label: role === 'field_worker' ? 'My Submissions' : 'Audit Trail', icon: FileText, badge: auditRecords.length, roles: ['field_worker', 'manager', 'admin'] },
+    { path: '/settings', label: 'Settings & Admin', icon: SettingsIcon, roles: ['admin'] },
   ];
 
+  const visibleNavItems = allNavItems.filter(item => item.roles.includes(role));
+
+  const roleLabelMap = {
+    admin: { label: 'ADMIN', color: 'bg-amber-100 text-amber-900 border-amber-300' },
+    manager: { label: 'MANAGER', color: 'bg-sky-100 text-sky-900 border-sky-300' },
+    field_worker: { label: 'FIELD WORKER', color: 'bg-emerald-100 text-emerald-900 border-emerald-300' }
+  };
+
+  const currentRoleStyle = roleLabelMap[role] || roleLabelMap.field_worker;
+
   return (
-    <header className="sticky top-0 z-50 bg-surface-container-lowest/95 backdrop-blur-md border-b border-surface-container-high shadow-xs">
+    <header className="sticky top-0 z-50 bg-surface-container-lowest/95 backdrop-blur-md border-b border-outline/10 shadow-xs">
       <div className="max-w-7xl mx-auto h-16 px-4 md:px-6 flex items-center justify-between gap-4">
         
         {/* Brand Logo & Title */}
@@ -35,22 +48,17 @@ export const Navbar: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <span className="font-extrabold text-lg text-on-surface tracking-tight uppercase">SAARTHI</span>
-              <span className="font-mono text-[11px] font-semibold bg-surface-container text-on-surface px-2 py-0.5 rounded">
-                [METRO LINE 4 — PHASE 2B]
+              <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-extrabold border ${currentRoleStyle.color}`}>
+                [{currentRoleStyle.label}]
               </span>
             </div>
-            <div className="flex items-center gap-2 text-[11px] font-mono text-on-surface-variant">
-              <span>SIH26122</span>
-              <span>•</span>
-              <span className="text-secondary font-semibold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
-                {autoApproveMode ? 'ZERO-TOUCH AUTONOMOUS' : 'MANUAL REVIEW'}
-              </span>
+            <div className="flex items-center gap-2 text-[11px] font-mono text-on-surface-variant font-semibold">
+              <span>{currentUser?.full_name || currentUser?.email || 'SIH26122'}</span>
             </div>
           </div>
         </div>
 
-        {/* Offline Queue Badge & Status Indicator */}
+        {/* Status Indicators, Nav Items & User Actions */}
         <div className="flex items-center gap-2">
           {offlineQueueCount > 0 ? (
             <button
@@ -67,15 +75,15 @@ export const Navbar: React.FC = () => {
               <span>OFFLINE</span>
             </div>
           ) : (
-            <div className="hidden sm:flex items-center gap-1 text-[11px] font-mono text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-300 font-bold">
+            <div className="hidden lg:flex items-center gap-1 text-[11px] font-mono text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-full border border-emerald-300 font-bold">
               <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
-              <span>ONLINE & SYNCED</span>
+              <span>ONLINE</span>
             </div>
           )}
 
-          {/* TASK 1: Navigation Items with Hover Animations & Scoped Active Indicator */}
+          {/* Nav Items (Role Gated) */}
           <nav className="flex items-center gap-1 md:gap-2 h-16 overflow-x-auto">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const Icon = item.icon;
               return (
                 <NavLink
@@ -99,7 +107,7 @@ export const Navbar: React.FC = () => {
                         </span>
                       )}
 
-                      {/* Scoped Underline Indicator with Smooth Center-Expand Hover Animation (<150ms) */}
+                      {/* Scoped Underline Indicator */}
                       <span
                         className={`absolute bottom-0 left-2 right-2 h-[2px] rounded-full transition-all duration-150 ease-out origin-center ${
                           isActive
@@ -113,6 +121,18 @@ export const Navbar: React.FC = () => {
               );
             })}
           </nav>
+
+          {/* Logout Button */}
+          {currentUser && (
+            <button
+              onClick={logout}
+              title="Log out of current account"
+              className="p-2 ml-1 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
+
         </div>
 
       </div>

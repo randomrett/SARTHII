@@ -116,42 +116,66 @@ export const ReviewQueue: React.FC<ReviewQueueProps> = ({
                 </div>
 
                 {/* Reassignment & Adjustment Control */}
-                <div className="bg-surface-container p-3 rounded-lg border border-outline/15 space-y-2">
-                  <span className="text-on-surface-variant font-bold block uppercase text-[10px]">
+                <div className="bg-surface-container p-3.5 rounded-xl border border-outline/20 space-y-3">
+                  <span className="text-on-surface-variant font-bold block uppercase text-[10px] tracking-wider">
                     MANAGER REASSIGNMENT / PROGRESS ADJUSTMENT:
                   </span>
                   
                   {/* Select Activity */}
-                  <select
-                    value={selectedActId}
-                    onChange={(e) => {
-                      const newId = e.target.value;
-                      setReassignMap(prev => ({ ...prev, [record.id]: newId }));
-                      const newAct = activities.find(a => a.id === newId);
-                      if (newAct) {
-                        setProgressMap(prev => ({ ...prev, [record.id]: newAct.progress + 10 }));
-                      }
-                    }}
-                    className="w-full bg-surface-container-lowest border border-outline/30 text-on-surface p-2 rounded-md font-sans text-xs focus:outline-none focus:border-slate-900 cursor-pointer"
-                  >
-                    {activities.map(a => (
-                      <option key={a.id} value={a.id}>
-                        [{a.id}] {a.name} ({a.zone}) — Current: {a.progress}%
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative w-full">
+                    <select
+                      value={selectedActId}
+                      onChange={(e) => {
+                        const newId = e.target.value;
+                        setReassignMap(prev => ({ ...prev, [record.id]: newId }));
+                        const newAct = activities.find(a => a.id === newId);
+                        if (newAct) {
+                          setProgressMap(prev => ({ ...prev, [record.id]: newAct.progress }));
+                        }
+                      }}
+                      className="w-full bg-surface-container-lowest border border-outline/30 text-on-surface font-sans text-xs p-2.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary focus:border-secondary cursor-pointer shadow-xs appearance-none"
+                      style={{
+                        backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2344474D%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")`,
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'right 0.75rem center',
+                        backgroundSize: '0.65rem auto',
+                        paddingRight: '2rem'
+                      }}
+                    >
+                      {!activities.some(a => a.id === record.matchedActivityId) && record.matchedActivityId && (
+                        <option value={record.matchedActivityId} className="bg-surface-container-lowest text-on-surface py-1">
+                          {record.matchedActivityId} — {record.matchedActivityName || 'Matched Activity'} — {record.matchedZone || 'Zone'}
+                        </option>
+                      )}
+                      {activities.map(a => (
+                        <option key={a.id} value={a.id} className="bg-surface-container-lowest text-on-surface py-1">
+                          {a.id} — {a.name} — {a.zone}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                  {/* Progress Range Slider */}
-                  <div className="flex items-center justify-between gap-2 pt-1 font-sans">
-                    <span className="text-on-surface-variant">Set Progress %:</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={currentNewProgress}
-                      onChange={(e) => setProgressMap(prev => ({ ...prev, [record.id]: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) }))}
-                      className="w-20 bg-surface-container-lowest border border-outline/30 text-slate-900 font-mono font-bold p-1 rounded text-right"
-                    />
+                  {/* Progress Range & Number Input */}
+                  <div className="flex items-center justify-between gap-3 pt-1 font-sans">
+                    <span className="text-on-surface-variant text-xs font-semibold">Set Progress %:</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={currentNewProgress}
+                        onChange={(e) => setProgressMap(prev => ({ ...prev, [record.id]: parseInt(e.target.value) || 0 }))}
+                        className="w-24 accent-secondary cursor-pointer"
+                      />
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={currentNewProgress}
+                        onChange={(e) => setProgressMap(prev => ({ ...prev, [record.id]: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) }))}
+                        className="w-16 bg-surface-container-lowest border border-outline/30 text-on-surface font-mono font-bold text-xs p-1.5 rounded-md text-right focus:outline-none focus:ring-2 focus:ring-secondary"
+                      />
+                    </div>
                   </div>
                 </div>
 

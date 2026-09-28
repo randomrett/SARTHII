@@ -3,6 +3,7 @@ import { Plus, Edit2, Trash2, Calendar, Table, BarChart3, CheckCircle2, Clock, A
 import type { Activity, ActivityStatus } from '../types';
 import { useScheduleContext } from '../context/ScheduleContext';
 import { ZoneTag } from './ui/ZoneTag';
+import { API_BASE_URL, fetchWithTimeout } from '../utils/api';
 
 interface ScheduleBuilderProps {
   activities: Activity[];
@@ -62,7 +63,7 @@ export const ScheduleBuilder: React.FC<ScheduleBuilderProps> = ({
     formData.append('file', importFile);
 
     try {
-      const response = await fetch('http://localhost:8000/api/v1/schedule/import', {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/schedule/import`, {
         method: 'POST',
         body: formData
       });
@@ -166,27 +167,27 @@ export const ScheduleBuilder: React.FC<ScheduleBuilderProps> = ({
   const getStatusBadge = (status: ActivityStatus, progress: number) => {
     if (progress >= 100 || status === 'completed') {
       return (
-        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-secondary bg-secondary-container px-2.5 py-0.5 rounded-full font-mono">
-          <CheckCircle2 className="w-3 h-3" /> 100% DONE
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-900 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full font-mono">
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" /> 100% DONE
         </span>
       );
     }
     if (status === 'delayed') {
       return (
-        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full font-mono">
-          <AlertTriangle className="w-3 h-3" /> DELAYED
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full font-mono">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-700" /> DELAYED
         </span>
       );
     }
     if (progress > 0 || status === 'in_progress') {
       return (
-        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-primary bg-primary-container px-2.5 py-0.5 rounded-full font-mono">
-          <Clock className="w-3 h-3 animate-spin-slow" /> IN PROGRESS
+        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-900 bg-blue-100 border border-blue-300 px-2.5 py-0.5 rounded-full font-mono">
+          <Clock className="w-3.5 h-3.5 text-blue-700 animate-spin-slow" /> IN PROGRESS
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-on-surface-variant bg-surface-container px-2.5 py-0.5 rounded-full font-mono">
+      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-700 bg-slate-100 border border-slate-300 px-2.5 py-0.5 rounded-full font-mono">
         NOT STARTED
       </span>
     );

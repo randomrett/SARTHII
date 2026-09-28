@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
+from app.security import require_role
 from app.models.report import Report
 from app.models.activity import Activity
 from app.models.audit import AuditRecord

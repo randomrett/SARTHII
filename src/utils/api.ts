@@ -1,63 +1,152 @@
 // Central Backend API Client for SAARTHI
-import type { Activity, AuditRecord, MatchResult } from '../types';
+import type { Activity, AuditRecord, MatchResult, User, UserRole } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+
+export class ApiError extends Error {
+  status: number;
+  is401: boolean;
+  is403: boolean;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.is401 = status === 401;
+    this.is403 = status === 403;
+  }
+}
+
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem('saarthi_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 30000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    clearTimeout(id);
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('saarthi_token');
+        localStorage.removeItem('saarthi_user');
+        throw new ApiError('Session expired — please log in again', 401);
+      }
+      if (response.status === 403) {
+        throw new ApiError('Access denied: Operation requires higher permissions', 403);
+      }
+      if (response.status === 429) {
+        throw new ApiError('AI service busy / rate limited', 429);
+      }
+      if (response.status >= 500) {
+        throw new ApiError(`Server error (${response.status})`, response.status);
+      }
+      const errBody = await response.json().catch(() => ({ detail: response.statusText }));
+      throw new ApiError(errBody.detail || `Request failed with status ${response.status}`, response.status);
+    }
+    return response;
+  } catch (err: any) {
+    clearTimeout(id);
+    if (err.name === 'AbortError') {
+      throw new ApiError('Request timed out after 30 seconds', 408);
+    }
+    if (err instanceof ApiError) {
+      throw err;
+    }
+    throw new ApiError(err.message || 'Network error — service unreachable', 0);
+  }
+}
 
 export async function checkBackendReachability(): Promise<boolean> {
   if (typeof window !== 'undefined' && !navigator.onLine) {
     return false;
   }
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-    // Ping root /health or /api/v1/projects
     const healthUrl = API_BASE_URL.replace(/\/api\/v1\/?$/, '/health');
-    const res = await fetch(healthUrl, {
-      method: 'GET',
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
+    const res = await fetchWithTimeout(healthUrl, { method: 'GET' }, 3000);
     return res.ok;
   } catch {
     return false;
   }
 }
 
+/* Authentication API Methods */
+export async function apiLogin(email: string, password: string): Promise<{ access_token: string; token_type: string; user: User }> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  return await res.json();
+}
+
+export async function apiRegister(email: string, password: string, full_name?: string, role?: UserRole): Promise<User> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password, full_name, role: role || 'field_worker' })
+  });
+  return await res.json();
+}
+
+export async function apiFetchUsers(): Promise<User[]> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/auth/users`, {
+    headers: getAuthHeaders()
+  });
+  return await res.json();
+}
+
+export async function apiUpdateUserRole(userId: string, role: UserRole): Promise<User> {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/auth/users/${userId}/role`, {
+    method: 'PUT',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ role })
+  });
+  return await res.json();
+}
+
+/* Activity & Schedule Methods */
 export async function fetchActivities(): Promise<Activity[]> {
-  const res = await fetch(`${API_BASE_URL}/activities`);
-  if (!res.ok) throw new Error(`Failed to fetch activities: ${res.statusText}`);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/activities`, { headers: getAuthHeaders() });
   return await res.json();
 }
 
 export async function createActivity(activity: Activity): Promise<Activity> {
-  const res = await fetch(`${API_BASE_URL}/activities`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/activities`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify(activity)
   });
-  if (!res.ok) throw new Error(`Failed to create activity: ${res.statusText}`);
   return await res.json();
 }
 
 export async function updateActivity(activity: Activity): Promise<Activity> {
-  const res = await fetch(`${API_BASE_URL}/activities/${activity.id}`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/activities/${activity.id}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify(activity)
   });
-  if (!res.ok) throw new Error(`Failed to update activity: ${res.statusText}`);
   return await res.json();
 }
 
 export async function deleteActivity(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/activities/${id}`, {
-    method: 'DELETE'
+  await fetchWithTimeout(`${API_BASE_URL}/activities/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders()
   });
-  if (!res.ok && res.status !== 204) throw new Error(`Failed to delete activity: ${res.statusText}`);
 }
 
 export async function importScheduleActivities(activities: Activity[]): Promise<Activity[]> {
-  // Bulk import schedule activities to backend
   const created: Activity[] = [];
   for (const act of activities) {
     try {
@@ -71,38 +160,34 @@ export async function importScheduleActivities(activities: Activity[]): Promise<
 }
 
 export async function matchReportBackend(reportText: string, activities: Activity[], useGemini = false): Promise<MatchResult[]> {
-  const res = await fetch(`${API_BASE_URL}/match`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/match`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({
       report_text: reportText,
       activities,
       use_gemini: useGemini
     })
   });
-  if (!res.ok) throw new Error(`Backend matching failed: ${res.statusText}`);
   return await res.json();
 }
 
 export async function fetchAuditRecords(): Promise<AuditRecord[]> {
-  const res = await fetch(`${API_BASE_URL}/audit`);
-  if (!res.ok) throw new Error(`Failed to fetch audit records: ${res.statusText}`);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/audit`, { headers: getAuthHeaders() });
   return await res.json();
 }
 
 export async function fetchPendingAuditRecords(): Promise<AuditRecord[]> {
-  const res = await fetch(`${API_BASE_URL}/audit/pending`);
-  if (!res.ok) throw new Error(`Failed to fetch pending audit records: ${res.statusText}`);
+  const res = await fetchWithTimeout(`${API_BASE_URL}/audit/pending`, { headers: getAuthHeaders() });
   return await res.json();
 }
 
 export async function saveAuditRecord(record: AuditRecord): Promise<AuditRecord> {
-  const res = await fetch(`${API_BASE_URL}/audit`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/audit`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify(record)
   });
-  if (!res.ok) throw new Error(`Failed to save audit record: ${res.statusText}`);
   return await res.json();
 }
 
@@ -110,12 +195,11 @@ export async function approveAuditRecordBackend(
   recordId: string,
   options?: { activity_id?: string; new_progress?: number; notes?: string }
 ): Promise<AuditRecord> {
-  const res = await fetch(`${API_BASE_URL}/audit/${recordId}/approve`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/audit/${recordId}/approve`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify(options || {})
   });
-  if (!res.ok) throw new Error(`Failed to approve audit record: ${res.statusText}`);
   return await res.json();
 }
 
@@ -123,12 +207,11 @@ export async function rejectAuditRecordBackend(
   recordId: string,
   notes?: string
 ): Promise<AuditRecord> {
-  const res = await fetch(`${API_BASE_URL}/audit/${recordId}/reject`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/audit/${recordId}/reject`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({ notes })
   });
-  if (!res.ok) throw new Error(`Failed to reject audit record: ${res.statusText}`);
   return await res.json();
 }
 
@@ -137,22 +220,26 @@ export async function submitReportToBackend(
   idempotencyKey?: string,
   projectId?: string
 ): Promise<{ report: any; matchResults: MatchResult[] }> {
-  const res = await fetch(`${API_BASE_URL}/reports`, {
+  const res = await fetchWithTimeout(`${API_BASE_URL}/reports`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAuthHeaders(),
     body: JSON.stringify({
       raw_text: reportText,
       project_id: projectId || null,
       idempotency_key: idempotencyKey || null
     })
   });
-  if (!res.ok) throw new Error(`Failed to submit report: ${res.statusText}`);
   const reportData = await res.json();
 
-  // Match the report
-  const matchRes = await fetch(`${API_BASE_URL}/reports/${reportData.id}/match`, {
-    method: 'POST'
-  });
-  const matchResults = matchRes.ok ? await matchRes.json() : [];
+  let matchResults: MatchResult[] = [];
+  try {
+    const matchRes = await fetchWithTimeout(`${API_BASE_URL}/reports/${reportData.id}/match`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    matchResults = await matchRes.json();
+  } catch (e) {
+    console.warn('[API] Could not fetch backend match result for report:', e);
+  }
   return { report: reportData, matchResults };
 }

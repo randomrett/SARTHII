@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { History, ShieldCheck, CheckCircle2, Sliders, XCircle, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { History, ShieldCheck, CheckCircle2, Sliders, XCircle, ChevronDown, ChevronUp, Trash2, Clock } from 'lucide-react';
 import type { AuditRecord, ApprovalStatus } from '../types';
 import { ZoneTag } from './ui/ZoneTag';
 import { ConfidenceBadge } from './ui/ConfidenceBadge';
@@ -19,26 +19,33 @@ export const AuditLog: React.FC<AuditLogProps> = ({
     switch (status) {
       case 'auto_approved':
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-secondary bg-secondary-container px-2.5 py-0.5 rounded-full font-mono">
-            <CheckCircle2 className="w-3 h-3" /> AUTO-APPROVED
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-900 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full font-mono">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" /> AUTO-APPROVED
           </span>
         );
       case 'manually_approved':
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-primary bg-primary-container px-2.5 py-0.5 rounded-full font-mono">
-            <ShieldCheck className="w-3 h-3" /> MANUALLY APPROVED
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-900 bg-blue-100 border border-blue-300 px-2.5 py-0.5 rounded-full font-mono">
+            <ShieldCheck className="w-3.5 h-3.5 text-blue-700" /> MANUALLY APPROVED
           </span>
         );
       case 'corrected':
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full font-mono">
-            <Sliders className="w-3.5 h-3.5" /> OVERRIDDEN
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full font-mono">
+            <Sliders className="w-3.5 h-3.5 text-amber-700" /> OVERRIDDEN
           </span>
         );
       case 'rejected':
         return (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-800 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-full font-mono">
-            <XCircle className="w-3.5 h-3.5" /> DISCARDED
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-900 bg-rose-100 border border-rose-300 px-2.5 py-0.5 rounded-full font-mono">
+            <XCircle className="w-3.5 h-3.5 text-rose-700" /> DISCARDED
+          </span>
+        );
+      case 'pending_review':
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2.5 py-0.5 rounded-full font-mono">
+            <Clock className="w-3.5 h-3.5 text-amber-700" /> NEEDS REVIEW
           </span>
         );
     }

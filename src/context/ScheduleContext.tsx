@@ -158,20 +158,48 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     loadBackendData();
   }, [loadBackendData]);
 
-  // TASK 4 ITEM 4: LIVE WEBSOCKET-DRIVEN REAL-TIME UPDATES
+  // TASK 4 ITEM 4: LIVE WEBSOCKET-DRIVEN REAL-TIME UPDATES WITH POLLING FALLBACK
   useEffect(() => {
     if (!isBackendOnline) return;
 
     let socket: WebSocket | null = null;
     let reconnectTimeout: any = null;
+    let pollInterval: any = null;
+
+    const startPollingFallback = () => {
+      if (pollInterval) return;
+      console.log('⚡ [SAARTHI FALLBACK POLLING] WebSocket inactive — polling endpoints every 12s...');
+      pollInterval = setInterval(async () => {
+        try {
+          const freshActs = await apiFetchActivities();
+          setActivities(freshActs);
+          const freshAudits = await apiFetchAuditRecords();
+          setAuditRecords(freshAudits);
+        } catch (e) {
+          console.warn('[SAARTHI POLLING ERR]:', e);
+        }
+      }, 12000);
+    };
+
+    const stopPollingFallback = () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+    };
 
     const connectWebSocket = () => {
       try {
-        const wsUrl = 'ws://localhost:8000/ws/updates';
+        const envWsUrl = import.meta.env.VITE_WS_URL;
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+        const defaultWsUrl = apiBaseUrl.replace(/^http/, 'ws').replace(/\/api\/v1\/?$/, '') + '/ws/updates';
+        const wsUrl = envWsUrl || defaultWsUrl;
+
         console.log(`[SAARTHI WS CLIENT] Connecting to WebSocket at ${wsUrl}...`);
         socket = new WebSocket(wsUrl);
 
         socket.onopen = () => {
+          stopPollingFallback();
           console.log('[SAARTHI WS CLIENT] WebSocket connection established successfully.');
         };
 
@@ -180,7 +208,6 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             const data = JSON.parse(event.data);
             console.log('⚡ [SAARTHI WS EVENT RECV]:', data);
 
-            // Auto-refresh activities and audit records when server broadcasts an update
             const freshActs = await apiFetchActivities();
             setActivities(freshActs);
 
@@ -208,8 +235,9 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         };
 
         socket.onclose = () => {
-          console.warn('[SAARTHI WS CLIENT] WebSocket closed. Reconnecting in 3s...');
-          reconnectTimeout = setTimeout(connectWebSocket, 3000);
+          console.warn('[SAARTHI WS CLIENT] WebSocket closed. Starting fallback polling...');
+          startPollingFallback();
+          reconnectTimeout = setTimeout(connectWebSocket, 5000);
         };
 
         socket.onerror = (err) => {
@@ -218,6 +246,7 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         };
       } catch (e) {
         console.warn('[SAARTHI WS INIT ERR]:', e);
+        startPollingFallback();
       }
     };
 
@@ -226,6 +255,7 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     return () => {
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       if (socket) socket.close();
+      stopPollingFallback();
     };
   }, [isBackendOnline, addToastNotification]);
 
@@ -332,37 +362,46 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const handleSubmitReport = async (reportText: string) => {
-    setIsProcessing(true);
-    setLastAutoUpdateNotification(null);
-
-    const reachable = await checkBackendReachability();
-    setIsBackendOnline(reachable);
-
-    // OFFLINE QUEUE PATH
-    if (!reachable) {
-      const queuedItem = await enqueueReport(reportText);
-      const count = await getQueueCount();
-      setOfflineQueueCount(count);
-      setIsProcessing(false);
-
-      setLatestMatchSummary({
-        activityName: 'Queued for Sync',
-        zone: 'Offline Queue',
-        confidence: 100,
-        isAutoApproved: false,
-        newProgress: 0,
-        reportText,
-        isQueuedOffline: true,
-        idempotencyKey: queuedItem.idempotencyKey
-      });
+    if (!reportText || !reportText.trim() || isProcessing) {
+      console.warn('[SAARTHI] Report submit ignored: empty text or request already in flight.');
       return;
     }
 
-    // ONLINE PATH
+    setIsProcessing(true);
+    setLastAutoUpdateNotification(null);
+
     try {
+      const reachable = await checkBackendReachability();
+      setIsBackendOnline(reachable);
+
+      // OFFLINE QUEUE PATH
+      if (!reachable) {
+        const queuedItem = await enqueueReport(reportText);
+        const count = await getQueueCount();
+        setOfflineQueueCount(count);
+
+        setLatestMatchSummary({
+          activityName: 'Queued for Sync',
+          zone: 'Offline Queue',
+          confidence: 100,
+          isAutoApproved: false,
+          newProgress: 0,
+          reportText,
+          isQueuedOffline: true,
+          idempotencyKey: queuedItem.idempotencyKey
+        });
+
+        addToastNotification(
+          'pending_review',
+          'Backend Unreachable — Report Queued',
+          'Saved locally. Will auto-sync to baseline schedule when connectivity is restored.'
+        );
+        return;
+      }
+
+      // ONLINE PATH
       const results = matchReportToSchedule(reportText, activities);
       setMatchResults(results);
-      setIsProcessing(false);
 
       if (results && results.length > 0) {
         const topMatch = results[0];
@@ -432,7 +471,6 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             colors: ['#00F0FF', '#10B981', '#FF9F1C']
           });
         } else {
-          // TASK 3: Low confidence or Manual Review mode -> Create pending_review record!
           const pendingAuditRecord: AuditRecord = {
             id: `AUD-${Math.floor(1000 + Math.random() * 9000)}`,
             report_id: backendReport?.id,
@@ -459,8 +497,29 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           );
         }
       }
-    } catch (err) {
-      console.warn('[SAARTHI] Report processing error:', err);
+    } catch (err: any) {
+      console.error('[SAARTHI] Report processing failure:', err);
+      const is401 = err.is401 || err.status === 401;
+      const is403 = err.is403 || err.status === 403;
+      
+      const humanMessage = is401
+        ? 'Session expired — please log in again.'
+        : (is403
+            ? 'Access denied: Permission check failed for this role.'
+            : (err.message || 'AI evaluation service unavailable. Try again.'));
+
+      addToastNotification(
+        'pending_review',
+        is401 ? 'Session Expired' : (is403 ? 'Permission Error' : 'Evaluation Failed'),
+        humanMessage
+      );
+
+      if (is401) {
+        setTimeout(() => {
+          window.location.href = '/login';
+        }, 1500);
+      }
+    } finally {
       setIsProcessing(false);
     }
   };

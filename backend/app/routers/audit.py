@@ -6,7 +6,7 @@ from app.database import get_db
 from app.models.audit import AuditRecord
 from app.models.activity import Activity
 from app.schemas.audit import AuditRecordCreate, AuditRecordOut
-from app.security import get_current_user_optional, verify_project_access
+from app.security import get_current_user_optional, verify_project_access, require_role
 from app.routers.websocket import ws_manager, broadcast_sync
 
 router = APIRouter(prefix="/audit", tags=["Audit Trail"])
@@ -19,6 +19,8 @@ class ApproveReviewRequest(BaseModel):
 class RejectReviewRequest(BaseModel):
     notes: Optional[str] = None
 
+from app.models.report import Report
+
 @router.get("", response_model=List[AuditRecordOut])
 def list_audit_records(
     status: Optional[str] = None,
@@ -28,6 +30,12 @@ def list_audit_records(
     query = db.query(AuditRecord)
     if status:
         query = query.filter(AuditRecord.status == status)
+
+    if current_user and current_user.role == "field_worker":
+        # Field Worker: view their own submission history only
+        user_report_ids = [r.id for r in db.query(Report.id).filter(Report.submitted_by == current_user.email).all()]
+        query = query.filter(AuditRecord.report_id.in_(user_report_ids))
+
     return query.order_by(AuditRecord.id.desc()).all()
 
 @router.get("/pending", response_model=List[AuditRecordOut])

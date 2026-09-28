@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     # Defaults to SQLite local db if postgres URL is not provided in env
     DATABASE_URL: str = "sqlite:///./saarthi.db"
 
+    # CORS Allowed Origins (comma-separated)
+    CORS_ORIGINS: str = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,https://saarthi-frontend.vercel.app"
+
     # Gemini API Key & Model Configuration
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-1.5-flash"

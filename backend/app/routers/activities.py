@@ -5,7 +5,7 @@ from app.database import get_db
 from app.models.activity import Activity
 from app.schemas.activity import ActivityCreate, ActivityUpdate, ActivityOut
 from app.services.matching import refresh_schedule
-from app.security import get_current_user_optional, verify_project_access
+from app.security import get_current_user_optional, verify_project_access, require_role
 
 router = APIRouter(tags=["Activities"])
 
@@ -37,7 +37,7 @@ def list_project_activities(
 def create_activity(
     act_in: ActivityCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(require_role(["admin"]))
 ):
     if act_in.project_id:
         verify_project_access(act_in.project_id, db, current_user)
@@ -67,7 +67,7 @@ def update_activity(
     activity_id: str,
     act_in: ActivityUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(require_role(["field_worker", "manager", "admin"]))
 ):
     activity = db.query(Activity).filter(Activity.id == activity_id).first()
     if not activity:
@@ -89,7 +89,7 @@ def update_activity(
 def delete_activity(
     activity_id: str,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user_optional)
+    current_user = Depends(require_role(["admin"]))
 ):
     activity = db.query(Activity).filter(Activity.id == activity_id).first()
     if not activity:
@@ -100,3 +100,4 @@ def delete_activity(
     db.commit()
     _refresh_cache(db)
     return None
+

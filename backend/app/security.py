@@ -71,6 +71,19 @@ def get_current_user_optional(token: Optional[str] = Depends(oauth2_scheme_optio
         pass
     return None
 
+def require_role(allowed_roles: list):
+    """
+    Dependency that enforces role-based access control.
+    """
+    def role_checker(current_user = Depends(get_current_user)):
+        if not current_user or current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access denied: Operation requires one of the following roles: {allowed_roles}"
+            )
+        return current_user
+    return role_checker
+
 def verify_project_access(project_id: Optional[str], db: Session, user: Optional[Any] = None) -> bool:
     """
     Task 4 Authorization Check:

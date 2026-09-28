@@ -168,3 +168,12 @@ API runs at: **`http://localhost:8000`** (Swagger docs: `http://localhost:8000/d
 # Vision & document ingestion pipeline tests
 .\backend\venv\Scripts\python.exe backend/test_tasks_1_to_4.py
 ```
+
+---
+
+## 6. Vercel & Container Production Deployment
+- **Frontend SPA**: Deployed on Vercel with `vercel.json` SPA rewrites & HTTPS `Permissions-Policy` microphone header.
+- **Backend Container**: Dockerized FastAPI container with pre-downloaded SBERT & Whisper models, healthcheck endpoint (`/health`), and dynamic CORS configuration.
+- **Database**: Hosted PostgreSQL (Neon / Supabase).
+- **Deployment Documentation**: Complete step-by-step instructions available in [`DEPLOYMENT.md`](file:///c:/Users/umang/OneDrive/Documents/GitHub/SARTHII/DEPLOYMENT.md).
+

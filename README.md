@@ -46,58 +46,64 @@ Key highlights:
 
 ---
 
-### 1. Backend Setup (FastAPI API Server)
+## 2. Project structure
 
-```bash
-# Navigate to backend directory
-cd backend
-
-# Create virtual environment
-python -m venv venv
-
-# Activate virtual environment
-# Windows (PowerShell):
-.\venv\Scripts\activate
-# Linux/macOS:
-# source venv/bin/activate
-
-# Install Python dependencies
-pip install -r requirements.txt
-
-# Run Uvicorn development server
-uvicorn app.main:app --reload --port 8000
 ```
-
-The backend server will run at `http://localhost:8000` (Interactive API docs at `http://localhost:8000/docs`).
-
-*Optional Environment File (`.env` in repo root):*
-```env
-GEMINI_API_KEY=your-gemini-api-key-here
-SECRET_KEY=your-jwt-secret-key
-DATABASE_URL=sqlite:///./saarthi.db
-```
-
----
-
-### 2. Frontend Setup (React + Vite Web App)
-
-```bash
-# In the root repository directory
-npm install
-
-# Start Vite development server
-npm run dev
-```
-
-The frontend app will run at `http://localhost:5173`.
-
----
-
-### 3. Docker Compose Setup (Backend + PostgreSQL)
-
-```bash
-cd backend
-docker compose up --build
+SARTHII/
+├── CONTEXT.md                    # Single-file comprehensive technical documentation (this file)
+├── Roadmap.md                    # Official SIH problem statement roadmap and feature tracker
+├── README.md                     # Quickstart, project summary, and run instructions
+├── package.json                  # Frontend dependencies and npm scripts (name: "saarthi")
+├── vite.config.ts                # Vite configuration with React & Tailwind plugins
+├── index.html                    # Single-page app HTML entry point
+├── saarthi.db                    # Local dev SQLite database
+│
+├── src/                          # Frontend Source Code (React 19 + TypeScript)
+│   ├── main.tsx                  # React DOM root entry point
+│   ├── App.tsx                   # Top-level router wrapper with ScheduleProvider & Navbar
+│   ├── index.css                 # Blueprint design aesthetic styles & scrollbar utilities
+│   ├── types/
+│   │   └── index.ts              # Domain interfaces (Activity, MatchResult, AuditRecord)
+│   ├── context/
+│   │   └── ScheduleContext.tsx   # React Context providing persistent backend state, WebSocket sync, & review queue
+│   ├── components/
+│   │   ├── Navbar.tsx            # Navigation bar with active route highlighting, pending badges, & live toasts
+│   │   ├── ReportIntake.tsx      # Split voice intake (SpeechRecognition wake-word + MediaRecorder Whisper STT + Tap to Record)
+│   │   ├── ReviewQueue.tsx       # Human-in-the-Loop review queue for low-confidence match approvals/reassignments
+│   │   ├── PlannedVsActual.tsx   # Planned-vs-actual progress comparison dashboard & slippage gap detection
+│   │   ├── MatchingEngine.tsx    # Candidate match breakdown & sub-score visualizers
+│   │   ├── ScheduleBuilder.tsx   # Activity CRUD list builder, Gantt timeline view, & spreadsheet importer
+│   │   ├── AuditLog.tsx          # Audit trail history table of auto-approved, corrected, & rejected reports
+│   │   └── ui/                   # Modular UI badges (ConfidenceBadge, ZoneTag, StatCard)
+│   ├── pages/
+│   │   ├── HomePage.tsx          # Route '/' — Field Intake, inline match confirmation, & offline queued card
+│   │   ├── DashboardPage.tsx     # Route '/dashboard' — Stat metrics, ReviewQueue, PlannedVsActual, & MatchingEngine
+│   │   ├── SchedulePage.tsx      # Route '/schedule' — Activity schedule builder with Gantt timeline
+│   │   ├── AuditPage.tsx         # Route '/audit' — Timestamped audit log table
+│   │   └── SettingsPage.tsx      # Route '/settings' — Zero-Touch toggle & AI config
+│   └── utils/
+│       ├── api.ts                # Frontend HTTP client wrapper for FastAPI backend endpoints
+│       ├── offlineStore.ts       # IndexedDB offline report queue manager with idempotency keys
+│       ├── constructionPhonetics.ts # Spoken text normalization & construction jargon dictionary
+│       ├── matchingAlgorithm.ts # Client-side heuristic matching engine (fallback)
+│       └── presets.ts            # Baseline schedule presets (Metro, Highway, Tower)
+│
+└── backend/                      # FastAPI Python Backend Infrastructure
+    ├── Dockerfile                # Python 3.11 container definition
+    ├── docker-compose.yml        # Orchestrates API service + PostgreSQL container
+    ├── requirements.txt          # Python dependencies
+    ├── test_tasks_1_to_4.py      # End-to-end automated test suite for ingestion & vision pipelines
+    ├── test_session_tasks.py     # Session integration test suite for audio transcription, review queue & WebSocket
+    └── app/
+        ├── main.py               # FastAPI entrypoint, CORS configuration, & static uploads mount
+        ├── config.py             # Pydantic Settings (DB URL, Gemini API key, JWT keys)
+        ├── database.py           # SQLAlchemy engine & session factory
+        ├── security.py           # Password hashing, JWT token creation, & project authorization
+        ├── models/               # SQLAlchemy DB models (User, Project, Activity, Report, AuditRecord)
+        ├── schemas/              # Pydantic request/response schemas
+        ├── routers/              # API Endpoints (/auth, /projects, /activities, /reports, /match, /audit, /transcribe, /ingest, /ws)
+        ├── services/             # Semantic matcher (SBERT) & heuristic match wrappers
+        └── utils/                # Vision analysis (Gemini), document parser, excel parser, & phonetics
 ```
 
 ---

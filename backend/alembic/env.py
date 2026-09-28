@@ -12,6 +12,12 @@ import app.models
 
 config = context.config
 
+db_url = os.getenv("DATABASE_URL")
+if db_url:
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+    config.set_main_option("sqlalchemy.url", db_url)
+
 if config.config_file_name:
     fileConfig(config.config_file_name)
 

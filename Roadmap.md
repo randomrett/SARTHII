@@ -23,7 +23,7 @@ This tracks what's built vs. what's left, based on the official SIH idea submiss
 - [x] Database schema for users, projects, activities, reports, audit trail
 - [x] Port matching algorithm to backend, expose as API
 - [x] Live WebSocket update server (`/ws/updates`)
-- [ ] Deployment pipeline (Docker + AWS/Azure per the deck) — currently ready for Vercel / Cloud run deployment
+- [x] Deployment pipeline (Docker + Vercel SPA + Cloud Run / Render) — complete with vercel.json, 30s timeouts, WS fallback polling, & DEPLOYMENT.md guide
 
 ---
 
@@ -83,7 +83,7 @@ This tracks what's built vs. what's left, based on the official SIH idea submiss
 
 ## Completed in latest session
 
-- [x] **Task 1**: Completely reworked voice capture architecture (SpeechRecognition ONLY for wake-word -> MediaRecorder raw audio -> Whisper server endpoint `POST /reports/transcribe` -> report pipeline). Added prominent manual "Tap to Record" fallback button.
-- [x] **Task 2**: Fixed dark-on-dark button contrast accessibility bugs across all pages (+ Add Activity, Process Report, Save, Upload buttons).
-- [x] **Task 3**: Built Human-in-the-loop Review Queue on Dashboard with manager approval/rejection backend endpoints (`/audit/pending`, `/approve`, `/reject`).
-- [x] **Task 4**: Built Planned-vs-Actual progress dashboard, Gantt timeline view, early delay highlighting, live WebSocket push updates (`/ws/updates`), and in-app delay/anomaly toast notifications.
+- [x] **Task 1**: Fixed intermittent "Match & Evaluate" request failures with 30s AbortController timeout, guaranteed `finally` state resets (`isProcessing`), visible toast error surfacing (401 redirect, 403, 500), role check permission fix (`field_worker` allowed to update progress), and explicit offline queue result card notifications.
+- [x] **Task 2**: Fixed Manager Review Queue reassignment select dropdown (`ACT-ID — Activity name — Zone`), eliminated appearance black bar using explicit SVG chevron styling, enabled custom progress adjustment slider/input, and linked reassignment approval to `corrected` audit status.
+- [x] **Task 3**: Restyled LoginPage to match app light/navy/teal blueprint design system with Compass logo mark, smooth page transitions, responsive layout, and env-flag controlled demo login block (`VITE_ENABLE_DEMO_LOGINS=true`).
+- [x] **Task 4**: Configured production deployment pipeline (Vercel SPA `vercel.json` with microphone headers, env-driven URLs, zero TS errors build, WebSocket fallback polling, Dockerfile pre-downloading SBERT & Whisper models, idempotent seeding, and root `DEPLOYMENT.md` guide).

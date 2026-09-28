@@ -1,7 +1,9 @@
 import React from 'react';
 import { useScheduleContext } from '../context/ScheduleContext';
+import { useAuth } from '../context/AuthContext';
 import { SCHEDULE_PRESETS } from '../utils/presets';
-import { Settings as SettingsIcon, Bot, Cpu, Layers } from 'lucide-react';
+import { Settings as SettingsIcon, Bot, Cpu, Layers, Users, RefreshCw } from 'lucide-react';
+import type { UserRole } from '../types';
 
 export const SettingsPage: React.FC = () => {
   const {
@@ -15,6 +17,8 @@ export const SettingsPage: React.FC = () => {
     setApiKey
   } = useScheduleContext();
 
+  const { allUsers, updateUserRole, refreshUsers } = useAuth();
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto page-transition">
       
@@ -25,7 +29,7 @@ export const SettingsPage: React.FC = () => {
           SYSTEM CONFIGURATION & CONTROL PANEL
         </h2>
         <p className="text-xs text-on-surface-variant font-sans mt-1">
-          Manage autonomous execution settings, preset schedule baselines, and AI engine inference parameters.
+          Manage autonomous execution settings, preset schedule baselines, AI engine parameters, and system user roles.
         </p>
       </div>
 
@@ -136,9 +140,72 @@ export const SettingsPage: React.FC = () => {
           )}
         </div>
 
+        {/* Card 4: Admin User & Role Management Table */}
+        <div className="p-5 rounded-xl border border-outline/20 bg-surface-container-lowest shadow-sm space-y-4 md:col-span-2">
+          <div className="flex items-center justify-between border-b border-outline/10 pb-3">
+            <h3 className="font-bold text-on-surface text-xs font-mono uppercase flex items-center gap-2">
+              <Users className="w-4 h-4 text-cyan-600" />
+              4. SYSTEM USER ROLE ASSIGNMENT (ADMIN CONTROL)
+            </h3>
+            <button
+              onClick={refreshUsers}
+              className="flex items-center gap-1 text-[11px] font-mono text-primary hover:underline cursor-pointer"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh List
+            </button>
+          </div>
+
+          <p className="text-xs text-on-surface-variant font-sans">
+            Assign system roles (<code className="text-emerald-700 font-mono font-bold">field_worker</code>, <code className="text-sky-700 font-mono font-bold">manager</code>, <code className="text-amber-700 font-mono font-bold">admin</code>) to users. Changes update access privileges instantly.
+          </p>
+
+          <div className="overflow-x-auto rounded-xl border border-outline/15">
+            <table className="w-full text-left border-collapse text-xs font-mono">
+              <thead>
+                <tr className="border-b border-outline/15 text-on-surface-variant bg-surface-container-low font-bold">
+                  <th className="py-2.5 px-3">USER ID</th>
+                  <th className="py-2.5 px-3">FULL NAME</th>
+                  <th className="py-2.5 px-3">EMAIL ADDRESS</th>
+                  <th className="py-2.5 px-3">ASSIGNED ROLE</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline/10 font-sans">
+                {allUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-4 text-center text-on-surface-variant italic font-mono">
+                      No system users found. Demo accounts seed automatically on login.
+                    </td>
+                  </tr>
+                ) : (
+                  allUsers.map((user) => (
+                    <tr key={user.id} className="hover:bg-surface-container-low transition-colors">
+                      <td className="py-2.5 px-3 font-mono text-primary font-bold">{user.id}</td>
+                      <td className="py-2.5 px-3 font-semibold text-on-surface">{user.full_name || 'N/A'}</td>
+                      <td className="py-2.5 px-3 font-mono text-on-surface-variant">{user.email}</td>
+                      <td className="py-2.5 px-3">
+                        <select
+                          value={user.role}
+                          onChange={(e) => updateUserRole(user.id, e.target.value as UserRole)}
+                          className="bg-surface-container-lowest border border-outline/30 text-on-surface font-mono text-xs p-1.5 rounded-md focus:outline-none focus:border-primary cursor-pointer font-bold"
+                        >
+                          <option value="field_worker">Field Worker (Report Intake)</option>
+                          <option value="manager">Manager (Review Queue & Dashboard)</option>
+                          <option value="admin">Admin (Full Control & Schedule Builder)</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+
       </div>
 
     </div>
   );
 };
+
 
