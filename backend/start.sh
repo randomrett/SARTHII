@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set +e
 
 echo "⚡ [SAARTHI BACKEND] Running database migrations..."
 alembic upgrade head || echo "Migration warning: proceeding with startup..."
