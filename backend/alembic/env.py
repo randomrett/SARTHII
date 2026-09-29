@@ -7,17 +7,14 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from app.database import Base
+from app.database import Base, sanitize_db_url
 import app.models
 
 config = context.config
 
 db_url = os.getenv("DATABASE_URL")
 if db_url:
-    if db_url.startswith("postgres://"):
-        db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
-    elif db_url.startswith("postgresql://"):
-        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    db_url = sanitize_db_url(db_url)
     config.set_main_option("sqlalchemy.url", db_url)
 
 if config.config_file_name:

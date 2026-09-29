@@ -3,11 +3,34 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.config import settings
 
-db_url = settings.DATABASE_URL
-if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
-elif db_url.startswith("postgresql://"):
-    db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+from urllib.parse import unquote, quote_plus
+
+def sanitize_db_url(url: str) -> str:
+    if not url:
+        return url
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    
+    try:
+        scheme_split = url.split("://", 1)
+        if len(scheme_split) == 2:
+            scheme, rest = scheme_split
+            if "@" in rest:
+                last_at = rest.rfind("@")
+                userinfo = rest[:last_at]
+                hostinfo = rest[last_at + 1:]
+                if ":" in userinfo:
+                    user, password = userinfo.split(":", 1)
+                    raw_pass = unquote(password)
+                    enc_pass = quote_plus(raw_pass)
+                    return f"{scheme}://{user}:{enc_pass}@{hostinfo}"
+    except Exception:
+        pass
+    return url
+
+db_url = sanitize_db_url(settings.DATABASE_URL)
 
 connect_args = {}
 if db_url.startswith("sqlite"):
