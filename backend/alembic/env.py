@@ -14,11 +14,7 @@ config = context.config
 
 db_url = os.getenv("DATABASE_URL")
 if db_url:
-    sanitized = sanitize_db_url(db_url)
-    if hasattr(sanitized, "render_as_string"):
-        db_url_str = sanitized.render_as_string(hide_password=False)
-    else:
-        db_url_str = str(sanitized)
+    db_url_str = sanitize_db_url(db_url)
     config.set_main_option("sqlalchemy.url", db_url_str.replace("%", "%%"))
 
 if config.config_file_name:
