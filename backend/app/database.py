@@ -3,41 +3,72 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.config import settings
 
-from urllib.parse import unquote, quote_plus
+from sqlalchemy.engine import URL
+from urllib.parse import unquote
 
-def sanitize_db_url(url: str) -> str:
-    if not url:
-        return url
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
-    elif url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+def sanitize_db_url(url_str: str):
+    if not url_str or isinstance(url_str, URL) or url_str.startswith("sqlite"):
+        return url_str
     
-    try:
-        scheme_split = url.split("://", 1)
-        if len(scheme_split) == 2:
-            scheme, rest = scheme_split
-            if "@" in rest:
-                last_at = rest.rfind("@")
-                userinfo = rest[:last_at]
-                hostinfo = rest[last_at + 1:]
-                if ":" in userinfo:
-                    user, password = userinfo.split(":", 1)
-                    raw_pass = unquote(password)
-                    enc_pass = quote_plus(raw_pass)
-                    return f"{scheme}://{user}:{enc_pass}@{hostinfo}"
-    except Exception:
-        pass
-    return url
+    scheme = "postgresql+psycopg2"
+    if "://" in url_str:
+        s, rest = url_str.split("://", 1)
+        if s in ("postgres", "postgresql", "postgresql+psycopg2", "postgresql+psycopg"):
+            scheme = "postgresql+psycopg2"
+        else:
+            scheme = s
+    else:
+        rest = url_str
+
+    if "@" in rest:
+        last_at = rest.rfind("@")
+        userinfo = rest[:last_at]
+        hostinfo = rest[last_at + 1:]
+
+        user = ""
+        password = ""
+        if ":" in userinfo:
+            user, password = userinfo.split(":", 1)
+            password = unquote(password)
+        else:
+            user = unquote(userinfo)
+
+        host = hostinfo
+        port = 5432
+        database = "postgres"
+
+        if "/" in hostinfo:
+            host_port, database = hostinfo.split("/", 1)
+            if "?" in database:
+                database = database.split("?", 1)[0]
+        else:
+            host_port = hostinfo
+
+        if ":" in host_port:
+            host, port_str = host_port.split(":", 1)
+            try:
+                port = int(port_str)
+            except ValueError:
+                port = 5432
+
+        return URL.create(
+            drivername=scheme,
+            username=user,
+            password=password,
+            host=host,
+            port=port,
+            database=database
+        )
+    return url_str
 
 db_url = sanitize_db_url(settings.DATABASE_URL)
 
 connect_args = {}
-if db_url.startswith("sqlite"):
+if isinstance(db_url, str) and db_url.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
 
 engine_kwargs = {"connect_args": connect_args}
-if not db_url.startswith("sqlite"):
+if not (isinstance(db_url, str) and db_url.startswith("sqlite")):
     engine_kwargs["pool_pre_ping"] = True
     engine_kwargs["pool_recycle"] = 300
 
