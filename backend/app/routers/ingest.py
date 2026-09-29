@@ -24,6 +24,7 @@ from app.utils.gemini import (
     GeminiRateLimitError,
     GeminiConfigError
 )
+from app.utils.storage import upload_file_to_supabase
 
 router = APIRouter(tags=["Ingestion, Schedule Import & AI Vision"])
 
@@ -376,15 +377,23 @@ async def upload_report_image(
             detail=f"Image file exceeds maximum allowed size of 15MB ({len(file_bytes)} bytes uploaded)."
         )
 
-    # Save original image to disk
+    # Save original image file
     file_id = uuid.uuid4().hex[:10]
     safe_filename = f"{file_id}_{Path(filename).name}"
+    mime_type = file.content_type or "image/jpeg"
+
     saved_path = IMAGES_DIR / safe_filename
     with open(saved_path, "wb") as f:
         f.write(file_bytes)
 
-    media_url = f"/uploads/images/{safe_filename}"
-    mime_type = file.content_type or "image/jpeg"
+    # Upload to Supabase Storage (PUBLIC bucket) if configured
+    supabase_url = upload_file_to_supabase(
+        file_bytes=file_bytes,
+        destination_path=f"images/{safe_filename}",
+        content_type=mime_type
+    )
+
+    media_url = supabase_url if supabase_url else f"/uploads/images/{safe_filename}"
 
     try:
         gemini_res = analyze_image_with_gemini(
@@ -459,15 +468,23 @@ async def upload_report_video(
             detail=f"Video file exceeds maximum allowed size of 50MB ({len(file_bytes)} bytes uploaded)."
         )
 
-    # Save original video file to disk
+    # Save original video file
     file_id = uuid.uuid4().hex[:10]
     safe_filename = f"{file_id}_{Path(filename).name}"
+    mime_type = file.content_type or "video/mp4"
+
     saved_path = VIDEOS_DIR / safe_filename
     with open(saved_path, "wb") as f:
         f.write(file_bytes)
 
-    media_url = f"/uploads/videos/{safe_filename}"
-    mime_type = file.content_type or "video/mp4"
+    # Upload to Supabase Storage (PUBLIC bucket) if configured
+    supabase_url = upload_file_to_supabase(
+        file_bytes=file_bytes,
+        destination_path=f"videos/{safe_filename}",
+        content_type=mime_type
+    )
+
+    media_url = supabase_url if supabase_url else f"/uploads/videos/{safe_filename}"
 
     try:
         gemini_res = analyze_video_with_gemini(

@@ -10,8 +10,6 @@ interface HeaderProps {
   totalAuditCount: number;
   useGeminiApi: boolean;
   onToggleGeminiApi: () => void;
-  apiKey: string;
-  onApiKeyChange: (key: string) => void;
   autoApproveMode: boolean;
   onToggleAutoApproveMode: () => void;
 }
@@ -23,8 +21,6 @@ export const BlueprintHeader: React.FC<HeaderProps> = ({
   totalAuditCount,
   useGeminiApi,
   onToggleGeminiApi,
-  apiKey,
-  onApiKeyChange,
   autoApproveMode,
   onToggleAutoApproveMode
 }) => {
@@ -139,15 +135,6 @@ export const BlueprintHeader: React.FC<HeaderProps> = ({
               />
               <span>Use Live Gemini API</span>
             </label>
-            {useGeminiApi && (
-              <input
-                type="password"
-                placeholder="Paste Gemini API Key..."
-                value={apiKey}
-                onChange={(e) => onApiKeyChange(e.target.value)}
-                className="bg-slate-900 border border-amber-400/50 text-amber-200 px-2 py-1 rounded-xs text-xs w-48 focus:outline-none"
-              />
-            )}
           </div>
         </div>
       )}

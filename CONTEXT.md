@@ -6,7 +6,7 @@
 
 ## 1. What this project is
 
-SAARTHI is an AI-powered Planning-to-Execution bridge built to eliminate manual, delayed, and fragmented construction site progress reporting (SIH Problem Statement ID SIH26122). Field updates from site supervisors are captured via hands-free voice dictation ("Hey Saarthi" wake word with decibel-based Voice Activity Detection & physical mic teardown privacy control), structured text, site photo OCR & defect detection, site video keyframe analysis, or spreadsheet uploads (Excel/CSV ad-hoc reports and schedule baselines).
+SAARTHI is an AI-powered Planning-to-Execution bridge built to eliminate manual, delayed, and fragmented construction site progress reporting (SIH Problem Statement ID SIH26122). Field updates from site supervisors are captured via tap-to-record voice dictation (MediaRecorder API with decibel-based Voice Activity Detection & physical mic teardown privacy control), structured text, site photo OCR & defect detection, site video keyframe analysis, or spreadsheet uploads (Excel/CSV ad-hoc reports and schedule baselines).
 
 Field jargon and spoken location terms are normalized using domain phonetics and matched against master schedule activities via a hybrid matching engine (SBERT sentence embeddings + token overlap + zone/date plausibility). High-confidence matches ($\ge 78\%$) are automatically zero-touch auto-approved to update baseline progress and record immutable audit trail entries. Low-confidence matches (&lt;78%) are routed to the **Human-in-the-Loop Review Queue** on the manager dashboard for manual approval, reassignment, or rejection. SAARTHI is resilient to field connectivity drops via an IndexedDB offline queueing engine with client-generated idempotency keys and automatic background sync flush.
 
@@ -62,7 +62,7 @@ SARTHII/
 │   │   └── ScheduleContext.tsx   # React Context providing persistent backend state, WebSocket sync, & review queue
 │   ├── components/
 │   │   ├── Navbar.tsx            # Navigation bar with active route highlighting, pending badges, & live toasts
-│   │   ├── ReportIntake.tsx      # Split voice intake (SpeechRecognition wake-word + MediaRecorder Whisper STT + Tap to Record)
+│   │   ├── ReportIntake.tsx      # Tap-to-record voice intake (MediaRecorder Whisper STT + Decibel VAD auto-finish)
 │   │   ├── ReviewQueue.tsx       # Human-in-the-Loop review queue for low-confidence match approvals/reassignments
 │   │   ├── PlannedVsActual.tsx   # Planned-vs-actual progress comparison dashboard & slippage gap detection
 │   │   ├── MatchingEngine.tsx    # Candidate match breakdown & sub-score visualizers
@@ -105,12 +105,12 @@ SARTHII/
 ## 4. How the app actually works right now
 
 ### End-to-End User Flow
-1. **Reworked Split Voice Capture & Manual Fallback (`/`)**:
-   - The user opens the home page and can dictate a report or click **"Tap to Record"**.
-   - SpeechRecognition runs ONLY to detect the wake phrase **"Hey Saarthi"**.
-   - As soon as the wake word is detected (or when "Tap to Record" is clicked), SpeechRecognition stops completely, and the browser's **MediaRecorder API** records raw audio chunks.
-   - When recording ends (via decibel VAD 1.4s silence or clicking "Done Recording"), the audio blob is uploaded to backend `POST /api/v1/reports/transcribe`.
-   - The backend runs local OpenAI Whisper model transcription and returns text, which feeds into the standard report matching pipeline (`onSubmitReport`).
+1. **Tap-to-Record Voice Capture (`/`)**:
+   - The user opens the home page and clicks **"Tap to Record"** on the circular mic button.
+   - The browser's **MediaRecorder API** captures raw audio chunks in webm/wav format.
+   - When recording ends (via decibel VAD 1.4s silence or tapping the mic button again), the audio blob is uploaded to backend `POST /api/v1/reports/transcribe`.
+   - The backend runs local OpenAI Whisper model transcription and returns normalized text, which feeds directly into the report matching pipeline (`onSubmitReport`).
+   - *Note: Background wake-word continuous listening was explicitly removed for maximum field reliability.*
 
 2. **Human-in-the-Loop Review Queue (`/dashboard`)**:
    - Reports matching with confidence score &lt; 78% (or when Zero-Touch auto-approve mode is OFF) are routed into the **Pending Review Queue**.
@@ -128,7 +128,7 @@ SARTHII/
    - All connected browser dashboards automatically receive instant push events when reports are submitted, approved, or modified, eliminating manual page refreshes.
 
 5. **Mic Teardown Privacy Security**:
-   - Toggling microphone OFF in `ReportIntake.tsx` explicitly aborts `SpeechRecognition`, stops all `MediaStreamTrack` audio tracks (`track.stop()`), closes `AudioContext`, and terminates any `MediaRecorder` instance.
+   - Toggling microphone OFF in `ReportIntake.tsx` explicitly stops all `MediaStreamTrack` audio tracks (`track.stop()`), closes `AudioContext`, and terminates any active `MediaRecorder` instance.
 
 ---
 

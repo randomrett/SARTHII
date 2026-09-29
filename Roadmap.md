@@ -8,7 +8,7 @@ This tracks what's built vs. what's left, based on the official SIH idea submiss
 
 ## ✅ Already built (frontend proof-of-concept)
 
-- [x] Voice/text report intake with wake-word activation ("Hey Saarthi")
+- [x] Voice/text report intake with manual tap-to-record voice capture (Wake-word feature REMOVED for reliability)
 - [x] Heuristic (regex/keyword) semantic + location + date matching
 - [x] Confidence scoring with high/low threshold split
 - [x] Zero-touch auto-approval vs. manual review toggle
@@ -33,9 +33,9 @@ This tracks what's built vs. what's left, based on the official SIH idea submiss
 - [x] Video upload handling (Gemini Vision keyframes & video analysis)
 - [x] Excel file ingestion for ad-hoc reports
 - [x] Baseline schedule import from Primavera P6 / MS Project / Excel
-- [x] Reworked split voice capture architecture: browser SpeechRecognition wake-word trigger + MediaRecorder raw audio capture
+- [x] Tap-to-record voice capture architecture: raw audio MediaRecorder capture + server-side Whisper STT (Wake-word continuous listening loop removed)
 - [x] Server-side voice transcription via Whisper (`POST /api/v1/reports/transcribe`)
-- [x] Manual fallback "Tap to Record" button (bypasses wake word for guaranteed reliability)
+- [x] Tap-to-Record button (primary voice intake trigger with decibel VAD silence auto-finish)
 - [ ] Multilingual voice support (Hindi/Marathi/Tamil phonetics dictionary extensions)
 
 ---
@@ -87,3 +87,4 @@ This tracks what's built vs. what's left, based on the official SIH idea submiss
 - [x] **Task 2**: Fixed Manager Review Queue reassignment select dropdown (`ACT-ID — Activity name — Zone`), eliminated appearance black bar using explicit SVG chevron styling, enabled custom progress adjustment slider/input, and linked reassignment approval to `corrected` audit status.
 - [x] **Task 3**: Restyled LoginPage to match app light/navy/teal blueprint design system with Compass logo mark, smooth page transitions, responsive layout, and env-flag controlled demo login block (`VITE_ENABLE_DEMO_LOGINS=true`).
 - [x] **Task 4**: Configured production deployment pipeline (Vercel SPA `vercel.json` with microphone headers, env-driven URLs, zero TS errors build, WebSocket fallback polling, Dockerfile pre-downloading SBERT & Whisper models, idempotent seeding, and root `DEPLOYMENT.md` guide).
+- [x] **Wake-Word Removal Task**: Entirely removed unreliable background "Hey Saarthi" wake-word listening loop, SpeechRecognition triggers, phonetic variant matcher, and Voice Trainer calibration flow. Simplified ReportIntake to tap-to-record MediaRecorder + server-side Whisper transcription pipeline with decibel VAD auto-stop and clean mic teardown privacy control.

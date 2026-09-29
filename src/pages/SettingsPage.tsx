@@ -12,9 +12,7 @@ export const SettingsPage: React.FC = () => {
     autoApproveMode,
     setAutoApproveMode,
     useGeminiApi,
-    setUseGeminiApi,
-    apiKey,
-    setApiKey
+    setUseGeminiApi
   } = useScheduleContext();
 
   const { allUsers, updateUserRole, refreshUsers } = useAuth();
@@ -126,18 +124,9 @@ export const SettingsPage: React.FC = () => {
             </label>
           </div>
 
-          {useGeminiApi && (
-            <div className="space-y-2 pt-2">
-              <label className="text-xs font-semibold text-amber-800 font-mono block">Gemini API Key:</label>
-              <input
-                type="password"
-                placeholder="Paste Gemini API key here..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="w-full bg-surface-container-low border border-amber-300 text-on-surface p-2.5 text-xs font-mono rounded-lg focus:outline-none focus:border-amber-600"
-              />
-            </div>
-          )}
+          <p className="text-[11px] font-mono text-on-surface-variant italic">
+            Note: GEMINI_API_KEY is configured securely on the Render backend host environment.
+          </p>
         </div>
 
         {/* Card 4: Admin User & Role Management Table */}

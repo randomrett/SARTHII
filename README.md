@@ -7,11 +7,11 @@
 
 ## 📌 Overview
 
-**SAARTHI** is an AI-powered Planning-to-Execution bridge designed to solve the critical infrastructure challenge of manual, delayed, and scattered site progress reporting. Field updates from site supervisors are captured via hands-free voice dictation ("Hey Saarthi" wake word with decibel-based Voice Activity Detection), structured text, site photos, videos, or spreadsheet uploads. SAARTHI normalizes field jargon, matches reports against master schedule activities, calculates confidence scores, and updates planned vs. actual progress automatically.
+**SAARTHI** is an AI-powered Planning-to-Execution bridge designed to solve the critical infrastructure challenge of manual, delayed, and scattered site progress reporting. Field updates from site supervisors are captured via tap-to-record voice dictation (MediaRecorder API with decibel-based Voice Activity Detection), structured text, site photos, videos, or spreadsheet uploads. SAARTHI normalizes field jargon, matches reports against master schedule activities, calculates confidence scores, and updates planned vs. actual progress automatically.
 
 Key highlights:
 - **Zero-Touch Autonomous Execution**: Auto-approves high-confidence updates ($\ge 78\%$) and updates project baselines instantly.
-- **Hands-Free Voice Dictation**: Voice Activity Detection (VAD) with decibel-level monitoring and physical microphone teardown privacy security.
+- **Tap-to-Record Voice Dictation**: MediaRecorder API with Voice Activity Detection (VAD) decibel monitoring and physical microphone teardown privacy security.
 - **Offline-to-Online Sync**: Field connectivity drop resilience with IndexedDB queueing and idempotency-based server deduplication.
 - **Multi-Modal Data Capture**: Support for voice, text, site photo OCR & defect detection (Gemini Vision), video keyframes, and Excel/CSV ad-hoc report and schedule imports.
 - **Persistent Backend Integration**: FastAPI + SQLite/PostgreSQL database backend with full CRUD, audit trail, and project authorization checks.
@@ -68,7 +68,7 @@ SARTHII/
 │   │   └── ScheduleContext.tsx   # React Context providing persistent backend state, WebSocket sync, & review queue
 │   ├── components/
 │   │   ├── Navbar.tsx            # Navigation bar with active route highlighting, pending badges, & live toasts
-│   │   ├── ReportIntake.tsx      # Split voice intake (SpeechRecognition wake-word + MediaRecorder Whisper STT + Tap to Record)
+│   │   ├── ReportIntake.tsx      # Tap-to-record voice intake (MediaRecorder Whisper STT + Decibel VAD auto-finish)
 │   │   ├── ReviewQueue.tsx       # Human-in-the-Loop review queue for low-confidence match approvals/reassignments
 │   │   ├── PlannedVsActual.tsx   # Planned-vs-actual progress comparison dashboard & slippage gap detection
 │   │   ├── MatchingEngine.tsx    # Candidate match breakdown & sub-score visualizers

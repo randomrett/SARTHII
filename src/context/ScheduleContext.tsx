@@ -51,7 +51,6 @@ interface ScheduleContextType {
   pendingAuditRecords: AuditRecord[];
   autoApproveMode: boolean;
   useGeminiApi: boolean;
-  apiKey: string;
   isBackendOnline: boolean;
   offlineQueueCount: number;
   lastAutoUpdateNotification: {
@@ -75,7 +74,6 @@ interface ScheduleContextType {
   flushOfflineQueue: () => Promise<void>;
   setAutoApproveMode: React.Dispatch<React.SetStateAction<boolean>>;
   setUseGeminiApi: React.Dispatch<React.SetStateAction<boolean>>;
-  setApiKey: React.Dispatch<React.SetStateAction<string>>;
   dismissNotification: () => void;
   dismissToastNotification: (id: string) => void;
   clearLatestMatchSummary: () => void;
@@ -105,7 +103,6 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // AI Config & Connectivity State
   const [useGeminiApi, setUseGeminiApi] = useState<boolean>(false);
-  const [apiKey, setApiKey] = useState<string>('');
   const [isBackendOnline, setIsBackendOnline] = useState<boolean>(true);
   const [offlineQueueCount, setOfflineQueueCount] = useState<number>(0);
 
@@ -570,7 +567,6 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       pendingAuditRecords,
       autoApproveMode,
       useGeminiApi,
-      apiKey,
       isBackendOnline,
       offlineQueueCount,
       lastAutoUpdateNotification,
@@ -588,7 +584,6 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       flushOfflineQueue,
       setAutoApproveMode,
       setUseGeminiApi,
-      setApiKey,
       dismissNotification,
       dismissToastNotification,
       clearLatestMatchSummary

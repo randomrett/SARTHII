@@ -23,7 +23,7 @@ def run_transcription_accuracy_tests():
         {
           "test_id": "TEST-VOICE-01",
           "spoken_text": "Raft Foundation concrete pour in Zone A reached 85% completion today",
-          "source": "Wake word trigger ('Hey Saarthi') -> MediaRecorder WAV Blob",
+          "source": "Tap to Record -> MediaRecorder WAV Blob",
           "simulated_text": "raft foundation concrete pour in zone a reached 85 percent completion today"
         },
         {

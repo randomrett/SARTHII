@@ -72,6 +72,17 @@ def startup_event():
     except Exception as e:
         print(f"[SAARTHI STARTUP WARN] Could not pre-cache schedule embeddings: {e}")
 
+    # Measure actual process RAM footprint after model loading
+    try:
+        import psutil
+        process = psutil.Process(os.getpid())
+        mem_rss_mb = process.memory_info().rss / (1024 * 1024)
+        print(f"\n========================================================================")
+        print(f"[SAARTHI MEMORY FOOTPRINT] Process RSS Memory after model init: {mem_rss_mb:.2f} MB")
+        print(f"========================================================================\n")
+    except Exception as mem_err:
+        print(f"[SAARTHI MEMORY WARN] Could not read process memory: {mem_err}")
+
 # Root Health Check
 @app.get("/health", tags=["Health"])
 def health_check():

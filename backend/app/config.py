@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-1.5-flash"
 
+    # Supabase Credentials & Storage Bucket
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
+    SUPABASE_BUCKET: str = "report-media"
+
+    # Whisper Model Selection (tiny or base for RAM-constrained environments like Render Free Tier)
+    WHISPER_MODEL_NAME: str = "base"
+
     model_config = SettingsConfigDict(
         env_file=(str(ROOT_DIR / ".env"), str(BASE_DIR / ".env")),
         env_file_encoding="utf-8",

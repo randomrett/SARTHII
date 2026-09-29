@@ -37,7 +37,7 @@ export const HomePage: React.FC = () => {
           <div>
             <h2 className="text-sm font-bold text-on-surface tracking-wider uppercase">FIELD DATA INTAKE HUB</h2>
             <p className="text-xs text-on-surface-variant font-sans">
-              Hands-free voice dictation ("Hey Saarthi") or text report submission for automatic schedule updates.
+              Voice dictation or text report submission for automatic schedule updates.
             </p>
           </div>
         </div>
