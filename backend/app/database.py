@@ -15,16 +15,17 @@ def sanitize_db_url(url: str) -> str:
             url = "postgresql://" + url[len(prefix):]
             break
 
-    # Dynamically select dialect scheme based on available DB driver in environment
+    # Dynamically select dialect scheme based on available DB driver in environment (psycopg2 preferred)
     try:
-        import psycopg
-        url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+        import psycopg2
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
     except ImportError:
         try:
-            import psycopg2
-            url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+            import psycopg
+            url = url.replace("postgresql://", "postgresql+psycopg://", 1)
         except ImportError:
             pass
+
 
     try:
         if "://" in url:
