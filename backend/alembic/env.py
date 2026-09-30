@@ -16,6 +16,10 @@ db_url = os.getenv("DATABASE_URL")
 if db_url:
     db_url_str = sanitize_db_url(db_url)
     config.set_main_option("sqlalchemy.url", db_url_str.replace("%", "%%"))
+else:
+    ini_url = config.get_main_option("sqlalchemy.url")
+    if ini_url:
+        config.set_main_option("sqlalchemy.url", sanitize_db_url(ini_url).replace("%", "%%"))
 
 if config.config_file_name:
     fileConfig(config.config_file_name)
