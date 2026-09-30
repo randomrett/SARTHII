@@ -9,23 +9,12 @@ def sanitize_db_url(url: str) -> str:
     if not url or url.startswith("sqlite"):
         return url
     
-    # Strip any dialect prefix to get clean postgresql://
-    for prefix in ("postgres://", "postgresql+psycopg2://", "postgresql+psycopg://"):
-        if url.startswith(prefix):
-            url = "postgresql://" + url[len(prefix):]
-            break
-
-    # Dynamically select dialect scheme based on available DB driver in environment (psycopg2 preferred)
-    try:
-        import psycopg2
-        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
-    except ImportError:
-        try:
-            import psycopg
-            url = url.replace("postgresql://", "postgresql+psycopg://", 1)
-        except ImportError:
-            pass
-
+    if url.startswith("postgres://"):
+        url = "postgresql+psycopg2://" + url[len("postgres://"):]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+psycopg2://" + url[len("postgresql://"):]
+    elif url.startswith("postgresql+psycopg://"):
+        url = "postgresql+psycopg2://" + url[len("postgresql+psycopg://"):]
 
     try:
         if "://" in url:
@@ -42,6 +31,7 @@ def sanitize_db_url(url: str) -> str:
     except Exception:
         pass
     return url
+
 
 
 db_url = sanitize_db_url(settings.DATABASE_URL)
