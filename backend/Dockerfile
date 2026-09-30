@@ -11,10 +11,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
-# Pre-download SentenceTransformer (SBERT) and Whisper (base) models during IMAGE BUILD
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2'); import whisper; whisper.load_model('base')"
+# Pre-download SentenceTransformer (SBERT) and Whisper (tiny int8) models during IMAGE BUILD
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2'); from faster_whisper import WhisperModel; WhisperModel('tiny', device='cpu', compute_type='int8'); import whisper; whisper.load_model('tiny')"
 
 COPY . .
 
