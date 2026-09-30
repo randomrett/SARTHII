@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Mic, Activity as PulseIcon, AlertCircle, Radio, ShieldCheck, ShieldAlert, Square } from 'lucide-react';
+import { Send, Mic, Activity as PulseIcon, AlertCircle, Radio, ShieldCheck, ShieldAlert, Square, X } from 'lucide-react';
 import { normalizeSpokenReport } from '../utils/constructionPhonetics';
-import { API_BASE_URL } from '../utils/api';
+import { API_BASE_URL, apiTranscribeAudio, ApiError } from '../utils/api';
 
 interface ReportIntakeProps {
   onSubmitReport: (reportText: string) => void;
@@ -41,6 +41,8 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
   const [audioWaveform, setAudioWaveform] = useState<number[]>([15, 30, 60, 40, 80, 50, 90, 30, 20]);
   const [decibelLevel, setDecibelLevel] = useState<number>(0);
   const [isTranscribingWhisper, setIsTranscribingWhisper] = useState(false);
+  const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
+
 
   // Refs for State Machine & Media Streams
   const isRecordingRef = useRef(false);
@@ -97,6 +99,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
   // Start MediaRecorder audio capture
   const startRawAudioRecording = async () => {
     console.log('[SAARTHI VOICE] Starting raw MediaRecorder audio capture...');
+    setTranscriptionError(null);
 
     if (!mediaStreamRef.current) {
       try {
@@ -110,6 +113,7 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
         setMicStatus('denied');
         setHasMicPermission(false);
         hasMicPermissionRef.current = false;
+        setTranscriptionError('Microphone permission denied by browser. Please allow microphone access in your browser settings.');
         return;
       }
     } else {
@@ -141,12 +145,14 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
       console.log('[SAARTHI MEDIA RECORDER] Recording audio raw chunks via MediaRecorder...');
     } catch (err) {
       console.error('[SAARTHI MEDIA RECORDER] Failed to start MediaRecorder:', err);
+      setTranscriptionError('Failed to access MediaRecorder. Microphone might be in use or unsupported.');
     }
   };
 
   // Stop MediaRecorder and POST audio blob to /reports/transcribe endpoint
   const stopRecordingAndTranscribe = async () => {
     console.log('[SAARTHI VOICE] Stopping recording and submitting to Whisper endpoint...');
+    setTranscriptionError(null);
 
     isRecordingRef.current = false;
     setIsRecording(false);
@@ -162,35 +168,37 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
       const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
       console.log(`[SAARTHI WHISPER CLIENT] Uploading ${audioBlob.size} bytes audio blob to backend...`);
 
-      const formData = new FormData();
-      formData.append('file', audioBlob, 'field_dictation.webm');
-
       try {
         setIsTranscribingWhisper(true);
-        const res = await fetch(`${API_BASE_URL}/reports/transcribe`, {
-          method: 'POST',
-          body: formData
-        });
+        const data = await apiTranscribeAudio(audioBlob);
 
-        if (res.ok) {
-          const data = await res.json();
-          if (data.text && data.text.trim()) {
-            console.log('⚡ [WHISPER TRANSCRIPTION RESULT]:', data.text);
-            const cleanedText = sanitizeReportText(data.text);
-            setReportText(cleanedText);
-            reportTextRef.current = cleanedText;
-            setIsTranscribingWhisper(false);
-            
-            if (cleanedText && !isProcessingRef.current) {
-              onSubmitReport(cleanedText);
-            }
-            return;
+        if (data.text && data.text.trim()) {
+          console.log('⚡ [WHISPER TRANSCRIPTION RESULT]:', data.text);
+          const cleanedText = sanitizeReportText(data.text);
+          setReportText(cleanedText);
+          reportTextRef.current = cleanedText;
+          setIsTranscribingWhisper(false);
+          
+          if (cleanedText && !isProcessingRef.current) {
+            onSubmitReport(cleanedText);
+          }
+          return;
+        } else {
+          setTranscriptionError('No speech detected in audio recording. Please speak clearly into the microphone.');
+        }
+      } catch (err: any) {
+        console.error('[SAARTHI WHISPER CLIENT] Error calling transcription endpoint:', err);
+        if (err instanceof ApiError) {
+          if (err.status === 408) {
+            setTranscriptionError('Voice transcription timed out (server processing took >45s).');
+          } else if (err.status === 0) {
+            setTranscriptionError('Network error — backend transcription service unreachable.');
+          } else {
+            setTranscriptionError(`Server error processing audio (${err.status}: ${err.message})`);
           }
         } else {
-          console.warn('[SAARTHI WHISPER CLIENT] Server responded with error:', res.status);
+          setTranscriptionError(err.message || 'Failed to process voice recording. Please try again.');
         }
-      } catch (err) {
-        console.error('[SAARTHI WHISPER CLIENT] Error calling transcription endpoint:', err);
       } finally {
         setIsTranscribingWhisper(false);
       }
@@ -359,13 +367,31 @@ export const ReportIntake: React.FC<ReportIntakeProps> = ({
             </div>
           )}
 
+          {/* Transcription Error Alert Banner */}
+          {transcriptionError && (
+            <div className="w-full mb-6 p-3.5 bg-red-50 border border-red-300 text-red-800 rounded-xl text-xs font-mono flex items-center justify-between gap-3 shadow-sm">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                <span className="font-semibold text-left">{transcriptionError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTranscriptionError(null)}
+                className="text-xs text-red-700 hover:text-red-900 font-bold shrink-0 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {/* Permission Warning if Denied */}
-          {micStatus === 'denied' && (
+          {micStatus === 'denied' && !transcriptionError && (
             <div className="w-full mb-6 p-3 bg-red-100 border border-red-300 text-red-800 rounded-xl text-xs font-mono flex items-center justify-center gap-2">
               <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
               <span>Microphone permission denied by browser. Please allow microphone access in your browser settings.</span>
             </div>
           )}
+
 
           {/* Tap-to-Record Mic Control */}
           <div className="relative flex items-center justify-center my-4 select-none">

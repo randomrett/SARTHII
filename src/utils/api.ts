@@ -243,3 +243,23 @@ export async function submitReportToBackend(
   }
   return { report: reportData, matchResults };
 }
+
+export async function apiTranscribeAudio(audioBlob: Blob): Promise<{ text: string; language?: string; engine?: string; status?: string }> {
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'field_dictation.webm');
+
+  const headers: Record<string, string> = {};
+  const token = localStorage.getItem('saarthi_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const res = await fetchWithTimeout(`${API_BASE_URL}/reports/transcribe`, {
+    method: 'POST',
+    headers,
+    body: formData
+  }, 45000); // 45 second timeout for audio processing
+
+  return await res.json();
+}
+

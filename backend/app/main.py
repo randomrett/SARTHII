@@ -33,6 +33,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def add_security_and_permissions_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["Permissions-Policy"] = "microphone=(self), camera=(self), geolocation=(self)"
+    return response
+
 @app.on_event("startup")
 def startup_event():
     # Validate GEMINI_API_KEY presence at startup without crashing if dev testing locally
@@ -72,6 +78,15 @@ def startup_event():
     except Exception as e:
         print(f"[SAARTHI STARTUP WARN] Could not pre-cache schedule embeddings: {e}")
 
+    # Pre-load Whisper Speech-to-Text Model ONCE at startup to prevent OOM spikes and request timeouts
+    try:
+        from app.routers.transcribe import get_whisper_model
+        print("[SAARTHI STARTUP] Pre-loading Whisper model at container startup...")
+        get_whisper_model()
+        print("[SAARTHI STARTUP] Whisper model pre-loaded and ready for zero-latency requests!")
+    except Exception as e:
+        print(f"[SAARTHI STARTUP WARN] Could not pre-load Whisper model: {e}")
+
     # Measure actual process RAM footprint after model loading
     try:
         import psutil
@@ -82,6 +97,7 @@ def startup_event():
         print(f"========================================================================\n")
     except Exception as mem_err:
         print(f"[SAARTHI MEMORY WARN] Could not read process memory: {mem_err}")
+
 
 # Root Health Check
 @app.get("/health", tags=["Health"])
