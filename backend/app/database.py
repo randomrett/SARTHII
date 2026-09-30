@@ -15,6 +15,8 @@ def sanitize_db_url(url: str) -> str:
         url = "postgresql+psycopg2://" + url[len("postgresql://"):]
     elif url.startswith("postgresql+psycopg://"):
         url = "postgresql+psycopg2://" + url[len("postgresql+psycopg://"):]
+    elif url.startswith("postgresql+psycopg3://"):
+        url = "postgresql+psycopg2://" + url[len("postgresql+psycopg3://"):]
 
     try:
         if "://" in url:
